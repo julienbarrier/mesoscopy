@@ -6,8 +6,8 @@ import pprint
 import qcodes as qc
 from qcodes.dataset.data_set import load_by_run_spec, load_by_guid, DataSet
 from qcodes.dataset.guids import validate_guid_format
-from qcodes.dataset.data_export import (
-    DSPlotData, DataSetProtocol, _get_data_from_ds)
+from qcodes.dataset import DataSetProtocol
+from qcodes.dataset.data_export import DSPlotData, _get_data_from_ds
 from qcodes.dataset.sqlite.connection import transaction
 from qcodes.dataset.sqlite.query_helpers import one
 

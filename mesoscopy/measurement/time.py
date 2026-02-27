@@ -6,7 +6,11 @@ from datetime import datetime, timedelta
 from typing import (Optional, Sequence, Callable)
 from warnings import simplefilter
 from qcodes.dataset.experiment_container import Experiment
-from qcodes.utils.dataset import doNd
+from qcodes.dataset.dond import do_nd as doNd
+from qcodes.dataset.measurement_extensions import ParamMeasT as _ParamMeasT
+from qcodes.dataset.dond.do_nd_utils import ActionsT as _ActionsT
+doNd.ParamMeasT = _ParamMeasT
+doNd.ActionsT = _ActionsT
 from qcodes.instrument.parameter import _BaseParameter
 from .array import generate_1D_sweep_array
 

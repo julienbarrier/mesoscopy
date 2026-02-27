@@ -13,4 +13,5 @@ from .parameters import (CountParameter,
                          DensityParameter,
                          DisplacementParameter,
                          LinearParameter,
+                         RampParameter,
                          )

@@ -379,6 +379,50 @@ def init_smu(
 
         item += 1
 
+
+def configure_smu_2614B_gate(
+    smu_channel,
+    mode: str = 'voltage',
+    limiti: Optional[float] = 10e-9,
+    limitv: Optional[float] = 20,
+    measurerange_i: Optional[float] = 1e-7,
+    measurerange_v: Optional[float] = 20,
+    sourcerange_v: Optional[float] = 20,
+    nplc: Optional[float] = 5,
+    output: bool = False,
+    **kwargs
+) -> None:
+    """
+    Configure a Keithley 2600 SMU channel (smua or smub) for gate operation.
+    """
+    if mode == 'voltage':
+        if smu_channel.output() == 'off':
+            smu_channel.volt(0)
+            smu_channel.curr(0)
+        smu_channel.mode('voltage')
+        smu_channel.nplc(nplc)
+        smu_channel.limitv(limitv)
+        smu_channel.limiti(limiti)
+        smu_channel.measurerange_i(measurerange_i)
+        smu_channel.measurerange_v(measurerange_v)
+        smu_channel.sourcerange_v(sourcerange_v)
+        if output:
+            smu_channel.output('on')
+    else:
+        if smu_channel.output() == 'off':
+            smu_channel.volt(0)
+            smu_channel.curr(0)
+        smu_channel.mode('current')
+        smu_channel.nplc(nplc)
+        smu_channel.limiti(limiti)
+        smu_channel.limitv(limitv)
+        smu_channel.measurerange_i(measurerange_i)
+        smu_channel.measurerange_v(measurerange_v)
+        smu_channel.sourcerange_v(sourcerange_v)
+        if output:
+            smu_channel.output('on')
+
+
 def init_sim928(
     station: Station,
     max_rate: Optional[float] = 0.15,

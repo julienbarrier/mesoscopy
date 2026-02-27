@@ -1,7 +1,7 @@
 """Experiment execution and management."""
-from core.worker import Worker
-from plotting import LivePlottingSubscriber
-from experiments import TestGatesExperiment, GateGateMappingExperiment
+from mesoscopy.core.worker import Worker
+from mesoscopy.plotting import LivePlottingSubscriber
+from mesoscopy.experiments import TestGatesExperiment, GateGateMappingExperiment
 
 
 class ExperimentManager:

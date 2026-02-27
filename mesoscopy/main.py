@@ -6,8 +6,8 @@ Main entry point for the application.
 import sys
 from PyQt6.QtWidgets import QApplication
 
-from ui.main_window import MainWindow
-from core.constants import DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT
+from mesoscopy.ui.main_window import MainWindow
+from mesoscopy.core.constants import DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT
 
 
 def main():

@@ -13,7 +13,7 @@ from qcodes import Measurement, Station, ScaledParameter
 from qcodes.dataset.experiment_container import Experiment
 from qcodes.instrument.parameter import _BaseParameter
 from qcodes.dataset.plotting import plot_dataset
-from qcodes.utils.dataset.doNd import do0d
+from qcodes.dataset import do0d
 
 from ..measurement.array import generate_1D_sweep_array
 from ..measurement.sweep import sweep1d, fastsweep

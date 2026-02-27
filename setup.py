@@ -1,5 +1,11 @@
+import re
 from setuptools import setup, find_packages
-from mesoscopy import __version__
+
+with open("mesoscopy/__init__.py") as f:
+    match = re.search(r"^__version__\s*=\s*['\"]([^'\"]+)['\"]", f.read(), re.M)
+    if not match:
+        raise RuntimeError("Unable to find __version__ in mesoscopy/__init__.py")
+    __version__ = match.group(1)
 
 setup(name='mesoscopy',
       version=__version__,
@@ -28,4 +34,9 @@ setup(name='mesoscopy',
           "scipy",
           "pyserial"
       ],
+      entry_points={
+          "console_scripts": [
+              "mesoscopy=mesoscopy.main:main",
+          ],
+      },
       zip_safe=False)

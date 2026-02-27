@@ -5,15 +5,15 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import QThreadPool
 
-from core.constants import DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT, CONTENT_MARGINS
-from ui.tabs.instruments_tab import InstrumentsTab
-from ui.tabs.measurement_tab import MeasurementTab
-from ui.tabs.experiment_1d_tab import Experiment1DTab
-from ui.tabs.experiment_2d_tab import Experiment2DTab
-from ui.tabs.parameters_tab import ParametersTab
-from ui.dialogs import FileDialogs
-from ui.station_manager import StationManager
-from ui.experiment_manager import ExperimentManager
+from mesoscopy.core.constants import DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT, CONTENT_MARGINS
+from mesoscopy.ui.tabs.instruments_tab import InstrumentsTab
+from mesoscopy.ui.tabs.measurement_tab import MeasurementTab
+from mesoscopy.ui.tabs.experiment_1d_tab import Experiment1DTab
+from mesoscopy.ui.tabs.experiment_2d_tab import Experiment2DTab
+from mesoscopy.ui.tabs.parameters_tab import ParametersTab
+from mesoscopy.ui.dialogs import FileDialogs
+from mesoscopy.ui.station_manager import StationManager
+from mesoscopy.ui.experiment_manager import ExperimentManager
 
 
 class MainWindow(QMainWindow):

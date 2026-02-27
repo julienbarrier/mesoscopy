@@ -12,9 +12,14 @@ from qcodes.dataset.experiment_container import Experiment
 from qcodes.instrument.parameter import _BaseParameter
 from qcodes.dataset.descriptions.detect_shapes import \
     detect_shape_of_measurement
-from qcodes.utils.dataset import doNd
+from qcodes.dataset.dond import do_nd as doNd
+from qcodes.dataset.measurement_extensions import ParamMeasT as _ParamMeasT
+from qcodes.dataset.dond.do_nd_utils import ActionsT as _ActionsT
+doNd.ParamMeasT = _ParamMeasT
+doNd.ActionsT = _ActionsT
+doNd._catch_interrupts = doNd.catch_interrupts
 from qcodes.dataset.descriptions.versioning.rundescribertypes import Shapes
-from qcodes.utils.threading import process_params_meas
+process_params_meas = doNd.process_params_meas
 
 from ._utils import _is_monotonic, _safesweep_to
 from .parameters import TimeParameter

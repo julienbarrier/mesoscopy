@@ -1,5 +1,7 @@
+import time as _time_module
 from time import time
 from qcodes import Parameter
+import numpy as np
 from typing import Tuple
 from qcodes import Instrument
 from qcodes.utils.validators import Ints, Numbers
@@ -300,3 +302,38 @@ class LinearParameter(Parameter):
     def set_raw(self, value):
         self._x(value)
         self._y(self._m * value + self._p)
+
+
+class RampParameter(Parameter):
+    """
+    A Parameter that ramps the value of an underlying parameter at a fixed rate.
+    Used for voltage (or current) sweeps with a defined rate (e.g. V/s) and step delay.
+    """
+
+    def __init__(
+        self,
+        name: str,
+        param: _BaseParameter,
+        rate: float,
+        delay: float = 0.01,
+        **kwargs
+    ):
+        super().__init__(name, **kwargs)
+        self._param = param
+        self._rate = rate
+        self._delay = delay
+
+    def get_raw(self):
+        return self._param.get()
+
+    def set_raw(self, value):
+        start = self._param.get()
+        step = self._rate * self._delay
+        if step <= 0:
+            self._param.set(value)
+            return
+        n_steps = max(1, int(abs(value - start) / step))
+        array = np.linspace(start, value, num=n_steps + 1)
+        for v in array[1:]:
+            self._param.set(v)
+            _time_module.sleep(self._delay)

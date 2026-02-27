@@ -4,7 +4,7 @@ from PyQt6.QtWidgets import (
     QFormLayout, QGroupBox, QSizePolicy, QListWidget,
     QComboBox, QLabel, QWidget, QDoubleSpinBox, QCheckBox, QGridLayout,
 )
-from ui.tabs.ui_helpers import set_groupbox_title_bold
+from mesoscopy.ui.tabs.ui_helpers import set_groupbox_title_bold
 
 
 class InstrumentsTab:

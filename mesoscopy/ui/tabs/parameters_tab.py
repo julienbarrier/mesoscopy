@@ -5,7 +5,7 @@ from PyQt6.QtWidgets import (
     QComboBox, QLabel, QScrollArea, QWidget
 )
 from PyQt6.QtCore import Qt
-from ui.tabs.ui_helpers import set_groupbox_title_bold
+from mesoscopy.ui.tabs.ui_helpers import set_groupbox_title_bold
 
 
 class ParametersTab:

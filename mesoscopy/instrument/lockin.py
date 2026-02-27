@@ -2,14 +2,14 @@
 some initialisation functions for experiments
 """
 
-from typing import Optional
+from typing import Optional, Any
 from qcodes import Station, Instrument, Parameter
 from numpy import pi
 
 import zhinst.qcodes
 from zhinst.qcodes import MFLI
 from qcodes.instrument_drivers.stanford_research import SR830, SR860
-from qcodes.utils.validators import Any, ComplexNumbers
+from qcodes.utils.validators import ComplexNumbers
 from qcodes.instrument.parameter import ParamRawDataType
 
 
@@ -416,6 +416,44 @@ class ComplexSampleParameter(Parameter):
     def get_raw(self) -> ParamRawDataType:
         values_dict = self._dict_parameter.get()
         return complex(values_dict["x"], values_dict["y"])
+
+
+def configure_MFLI_osc_master(lockin, osc_idx: int = 0, frequency: float = 0.0) -> None:
+    """Set MFLI oscillator as master and set frequency (Hz)."""
+    lockin.oscs[osc_idx].freq(frequency)
+
+
+def configure_sr_lockin(
+    lockin,
+    time_constant: Optional[float] = None,
+    filter_slope: Optional[int] = 18,
+) -> None:
+    """Configure SR lock-in (e.g. SR860): time constant and filter slope (dB/oct)."""
+    if time_constant is not None:
+        lockin.time_constant(time_constant)
+    if filter_slope is not None:
+        lockin.filter_slope(filter_slope)
+
+
+def configure_MFLI(
+    lockin,
+    demod_idx: int = 0,
+    time_constant: Optional[float] = None,
+    order: Optional[int] = 4,
+    V_drive: Optional[float] = None,
+    adcselect: Optional[int] = None,
+) -> None:
+    """Configure one MFLI demodulator: time constant, filter order, optional drive and adc select."""
+    demod = lockin.demods[demod_idx]
+    if time_constant is not None:
+        demod.timeconstant(time_constant)
+    if order is not None:
+        demod.order(order)
+    if adcselect is not None:
+        demod.adcselect(adcselect)
+    if V_drive is not None:
+        lockin.sigouts[0].on(1)
+        lockin.sigouts[0].amplitudes[0].value(V_drive * (2 ** 0.5))
 
 
 class MFLIWithComplexSample(zhinst.qcodes.MFLI):

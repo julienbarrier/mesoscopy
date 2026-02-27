@@ -1,7 +1,3 @@
-import sys
-import os
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../XW423/measurements')))
-
 import qcodes
 from qcodes import Parameter, ScaledParameter, validators as vals
 from qcodes.dataset import dond, do1d, LinSweep
@@ -11,10 +7,12 @@ import time
 
 from PyQt6.QtWidgets import QLineEdit, QSpinBox, QDoubleSpinBox
 
-from functions.parameters import RampParameter
-from functions.instruments import (
-    configure_MFLI, configure_sr_lockin, configure_smu_2614B_gate,
-    configure_MFLI_osc_master
+from mesoscopy.measurement import RampParameter
+from mesoscopy.instrument import (
+    configure_MFLI,
+    configure_sr_lockin,
+    configure_smu_2614B_gate,
+    configure_MFLI_osc_master,
 )
 
 

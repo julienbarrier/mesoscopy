@@ -3,7 +3,7 @@ from PyQt6.QtWidgets import (
     QLineEdit, QPushButton, QVBoxLayout, QHBoxLayout,
     QFormLayout, QGroupBox, QSizePolicy, QComboBox,
 )
-from ui.tabs.ui_helpers import set_groupbox_title_bold
+from mesoscopy.ui.tabs.ui_helpers import set_groupbox_title_bold
 
 
 class MeasurementTab:
