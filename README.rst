@@ -1,10 +1,10 @@
-mesoscoPy
-=========
+mesoscopy - QCoDeS Experiment Runner for mesoscopic physics
+==========================================================
 
 |DOCS| |python versions|
 
-MesoscoPy is a library of utils to run experiment in mesoscopic physics. It runs with qCoDeS.
-To learn more about the synatx, read `First steps with mesoscoPy <https://condmatphys.github.io/mesoscoPy/start/first-steps.html>`__.
+Mesoscopy is a graphical user interface to run experiments in mesoscopic physics. It runs with QCoDeS as a backend.
+To install and learn how to use, read `First steps with mesoscoPy <https://condmatphys.github.io/mesoscoPy/start/first-steps.html>`__.
 
 Install
 =======
@@ -42,6 +42,6 @@ License
 See `License <https://github.com/condmatphys/mesoscoPy/tree/master/LICENSE>`__.
 
 
-.. |python versions| image:: https://img.shields.io/badge/python-3.9%20%7C%203.10%20%7C%203.11-blue.svg
+.. |python versions| image:: https://img.shields.io/badge/python-3.13%20%7C%203.14-blue.svg
 .. |DOCS| image:: https://img.shields.io/badge/read%20-thedocs-ff66b4.svg
    :target: http://condmatphys.github.io/mesoscoPy
