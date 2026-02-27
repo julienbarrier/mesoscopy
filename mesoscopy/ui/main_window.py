@@ -13,7 +13,7 @@ from mesoscopy.ui.tabs.experiment_2d_tab import Experiment2DTab
 from mesoscopy.ui.tabs.parameters_tab import ParametersTab
 from mesoscopy.ui.dialogs import FileDialogs
 from mesoscopy.ui.station_manager import StationManager
-from mesoscopy.ui.experiment_manager import ExperimentManager
+from mesoscopy.experiment.manager import ExperimentManager
 
 
 class MainWindow(QMainWindow):

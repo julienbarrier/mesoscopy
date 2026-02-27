@@ -1,10 +1,15 @@
 """Instruments tab UI components."""
+from math import ceil
 from PyQt6.QtWidgets import (
     QLineEdit, QPushButton, QVBoxLayout, QHBoxLayout,
     QFormLayout, QGroupBox, QSizePolicy, QListWidget,
     QComboBox, QLabel, QWidget, QDoubleSpinBox, QCheckBox, QGridLayout,
+    QScrollArea,
 )
 from mesoscopy.ui.tabs.ui_helpers import set_groupbox_title_bold
+
+LOCKINS_PER_ROW = 6
+SMU_CHANNELS_PER_ROW = 4
 
 
 class InstrumentsTab:
@@ -100,99 +105,67 @@ class InstrumentsTab:
         instruments_left.addWidget(logs_group)
         instruments_left.addStretch()
 
-        # Right side - Lock-ins, SMU
+        # Right side - Lock-ins and SMU config (populated after "Load selected instruments")
         instruments_right = QVBoxLayout()
 
-        # Lock-ins Configuration group
-        lockins_group = QGroupBox("Lock-ins Configuration")
-        set_groupbox_title_bold(lockins_group)
+        # Lock-ins Configuration group: content built in populate_lockin_smu_config
+        self.main_window.lockins_group = QGroupBox("Lock-ins Configuration")
+        set_groupbox_title_bold(self.main_window.lockins_group)
         lockins_layout = QVBoxLayout()
+        lockins_scroll = QScrollArea()
+        lockins_scroll.setWidgetResizable(True)
+        self.main_window.lockins_scroll_content = QWidget()
+        self.main_window.lockins_scroll_content.setLayout(QGridLayout())
+        lockins_scroll.setWidget(self.main_window.lockins_scroll_content)
+        lockins_layout.addWidget(lockins_scroll)
+        self.main_window.configure_lockins_button = QPushButton("Configure Lock-ins")
+        lockins_layout.addWidget(self.main_window.configure_lockins_button)
+        self.main_window.lockins_group.setLayout(lockins_layout)
+        self.main_window.lockins_group.setVisible(False)
+        instruments_right.addWidget(self.main_window.lockins_group)
 
-        # Grid of lock-in name fields (2 rows x 6 columns)
-        lockins_grid = QGridLayout()
+        # SMU Configuration group: content built in populate_lockin_smu_config
+        self.main_window.smu_group = QGroupBox("SMU Configuration")
+        set_groupbox_title_bold(self.main_window.smu_group)
+        smu_layout = QVBoxLayout()
+        smu_scroll = QScrollArea()
+        smu_scroll.setWidgetResizable(True)
+        self.main_window.smu_scroll_content = QWidget()
+        self.main_window.smu_scroll_content.setLayout(QGridLayout())
+        smu_scroll.setWidget(self.main_window.smu_scroll_content)
+        smu_layout.addWidget(smu_scroll)
+        self.main_window.configure_smu_button = QPushButton("Configure Source-Measure-Units")
+        smu_layout.addWidget(self.main_window.configure_smu_button)
+        self.main_window.smu_group.setLayout(smu_layout)
+        self.main_window.smu_group.setVisible(False)
+        instruments_right.addWidget(self.main_window.smu_group)
+        instruments_right.addStretch()
+
+        main_layout.addWidget(instruments_left_widget)
+        main_layout.addLayout(instruments_right)
+        main_layout.addStretch(1)  # Flush left column when Lock-ins/SMU groups are hidden
+
+    def _clear_layout(self, layout):
+        """Remove all widgets from a layout and delete them."""
+        while layout.count():
+            item = layout.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+            elif item.layout():
+                self._clear_layout(item.layout())
+
+    def populate_lockin_smu_config(self, lockin_names, smu_channel_list):
+        """
+        Build Lock-ins and SMU configuration grids from loaded instruments.
+        lockin_names: list of instrument names that are lock-ins.
+        smu_channel_list: list of display names e.g. ["keithley1.smua", "keithley1.smub"].
+        Groups are shown only if they have at least one entry.
+        """
         self.main_window.lockin_name_fields = []
         self.main_window.lockin_type_combos = []
         self.main_window.lockin_role_combos = []
         self.main_window.lockin_extref_combos = []
         self.main_window.lockin_oscillator_combos = []
-        
-        for row in range(2):
-            for col in range(6):
-                # Create a container widget for each grid cell
-                cell_widget = QWidget()
-                cell_layout = QVBoxLayout()
-                cell_layout.setContentsMargins(0, 0, 0, 0)
-                cell_layout.setSpacing(2)
-                
-                # Lock-in name field
-                lockin_field = QLineEdit()
-                lockin_field.setReadOnly(True)
-                lockin_field.setText("Lock-in name")
-                self.main_window.lockin_name_fields.append(lockin_field)
-                cell_layout.addWidget(lockin_field)
-                
-                # Measurement type dropdown
-                type_combo = QComboBox()
-                type_combo.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-                type_combo.addItems(['Vdiff', 'V+', 'I', 'AuxIn1', 'AuxIn2'])
-                self.main_window.lockin_type_combos.append(type_combo)
-                cell_layout.addWidget(type_combo)
-                
-                # Master/Slave dropdown
-                role_combo = QComboBox()
-                role_combo.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-                role_combo.addItems(['master', 'slave'])
-                # First item defaults to master, all others default to slave
-                idx = row * 6 + col
-                if idx == 0:
-                    role_combo.setCurrentIndex(0)  # master
-                else:
-                    role_combo.setCurrentIndex(1)  # slave
-                self.main_window.lockin_role_combos.append(role_combo)
-                cell_layout.addWidget(role_combo)
-                
-                # ExtRef dropdown (only for slave lock-ins)
-                extref_combo = QComboBox()
-                extref_combo.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-                extref_combo.addItems(['Sig In1', 'Curr In 1', 'Trigger 1', 'Trigger 2', 'Aux In 1', 'Aux In 2'])
-                # Show for slaves (all except first), hide for master (first)
-                extref_combo.setCurrentIndex(2)  # Default to Trigger 1
-                extref_combo.setVisible(idx != 0)
-                self.main_window.lockin_extref_combos.append(extref_combo)
-                cell_layout.addWidget(extref_combo)
-                
-                # Oscillator output dropdown (only for master lock-ins)
-                oscillator_combo = QComboBox()
-                oscillator_combo.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-                oscillator_combo.addItems(['Trigger Out 1', 'Trigger Out 2'])
-                # Show for master (first), hide for slaves (all others)
-                oscillator_combo.setVisible(idx == 0)
-                self.main_window.lockin_oscillator_combos.append(oscillator_combo)
-                cell_layout.addWidget(oscillator_combo)
-                
-                # Connect role change to show/hide ExtRef/Oscillator combos
-                role_combo.currentIndexChanged.connect(
-                    lambda checked, index=idx: self.on_lockin_role_changed(index)
-                )
-                
-                cell_widget.setLayout(cell_layout)
-                lockins_grid.addWidget(cell_widget, row, col)
-        
-        lockins_layout.addLayout(lockins_grid)
-
-        # Add configure button
-        self.main_window.configure_lockins_button = QPushButton("Configure Lock-ins")
-        lockins_layout.addWidget(self.main_window.configure_lockins_button)
-
-        lockins_group.setLayout(lockins_layout)
-        instruments_right.addWidget(lockins_group)
-
-        # SMU Configuration group
-        smu_group = QGroupBox("SMU Configuration")
-        set_groupbox_title_bold(smu_group)
-        smu_layout = QGridLayout()
-
-        # Create 3 sets of SMU fields
         self.main_window.smu_inputs = []
         self.main_window.smu_mode_inputs = []
         self.main_window.smu_limit_current_inputs = []
@@ -202,118 +175,168 @@ class InstrumentsTab:
         self.main_window.smu_nplc_inputs = []
         self.main_window.smu_outputs_enabled_inputs = []
 
-        for i in range(3):
-            # SMU field
-            smu_input = QLineEdit()
-            smu_input.setReadOnly(True)
-            self.main_window.smu_inputs.append(smu_input)
-            
-            # Mode dropdown
-            mode_input = QComboBox()
-            mode_input.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-            mode_input.addItems(['voltage', 'current'])
-            self.main_window.smu_mode_inputs.append(mode_input)
-            
-            # Limit current spinbox
-            limit_current = QDoubleSpinBox()
-            limit_current.setRange(1e-8, 1e-3)
-            limit_current.setDecimals(9)
-            limit_current.setSingleStep(1e-8)
-            self.main_window.smu_limit_current_inputs.append(limit_current)
-            
-            # Limit voltage spinbox
-            limit_voltage = QDoubleSpinBox()
-            limit_voltage.setRange(1e-6, 200)
-            limit_voltage.setDecimals(6)
-            limit_voltage.setSingleStep(0.1)
-            self.main_window.smu_limit_voltage_inputs.append(limit_voltage)
-            
-            # Current range dropdown
-            current_range = QComboBox()
-            current_range.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-            current_range.addItems(['100nA', '1µA', '10µA', '100µA', '1mA', '10mA', '100mA', '1A'])
-            self.main_window.smu_current_range_inputs.append(current_range)
-            
-            # Voltage range dropdown
-            voltage_range = QComboBox()
-            voltage_range.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-            voltage_range.addItems(['20mV', '200mV', '2V', '20V', '200V'])
-            voltage_range.setCurrentIndex(3)  # Default to 20V
-            self.main_window.smu_voltage_range_inputs.append(voltage_range)
-            
-            # NPLC spinbox
-            nplc = QDoubleSpinBox()
-            nplc.setRange(0.01, 10.0)
-            nplc.setDecimals(2)
-            nplc.setSingleStep(0.01)
-            nplc.setValue(1.00)
-            self.main_window.smu_nplc_inputs.append(nplc)
-            
-            # Outputs enabled checkbox
-            outputs_enabled = QCheckBox()
-            self.main_window.smu_outputs_enabled_inputs.append(outputs_enabled)
+        lockins_grid = self.main_window.lockins_scroll_content.layout()
+        smu_grid = self.main_window.smu_scroll_content.layout()
+        self._clear_layout(lockins_grid)
+        self._clear_layout(smu_grid)
 
-        # Add labels and widgets to grid
-        row = 0
-        smu_layout.addWidget(QLabel("Instrument/Channel"), row, 0)
-        for i in range(3):
-            smu_layout.addWidget(self.main_window.smu_inputs[i], row, i + 1)
-        
-        row += 1
-        smu_layout.addWidget(QLabel("Mode"), row, 0)
-        for i in range(3):
-            smu_layout.addWidget(self.main_window.smu_mode_inputs[i], row, i + 1)
-        
-        row += 1
-        smu_layout.addWidget(QLabel("Limit current (A)"), row, 0)
-        for i in range(3):
-            smu_layout.addWidget(self.main_window.smu_limit_current_inputs[i], row, i + 1)
-        
-        row += 1
-        smu_layout.addWidget(QLabel("Limit voltage (V)"), row, 0)
-        for i in range(3):
-            smu_layout.addWidget(self.main_window.smu_limit_voltage_inputs[i], row, i + 1)
-        
-        row += 1
-        smu_layout.addWidget(QLabel("Current range (A)"), row, 0)
-        for i in range(3):
-            smu_layout.addWidget(self.main_window.smu_current_range_inputs[i], row, i + 1)
-        
-        row += 1
-        smu_layout.addWidget(QLabel("Voltage range (V)"), row, 0)
-        for i in range(3):
-            smu_layout.addWidget(self.main_window.smu_voltage_range_inputs[i], row, i + 1)
-        
-        row += 1
-        smu_layout.addWidget(QLabel("NPLC"), row, 0)
-        for i in range(3):
-            smu_layout.addWidget(self.main_window.smu_nplc_inputs[i], row, i + 1)
-        
-        row += 1
-        smu_layout.addWidget(QLabel("Outputs enabled"), row, 0)
-        for i in range(3):
-            smu_layout.addWidget(self.main_window.smu_outputs_enabled_inputs[i], row, i + 1)
+        # ---- Lock-ins: 6 per row, labels in first column ----
+        n_lockins = len(lockin_names)
+        if n_lockins > 0:
+            n_rows = ceil(n_lockins / LOCKINS_PER_ROW)
+            for idx in range(n_lockins):
+                row_idx = idx // LOCKINS_PER_ROW
+                col_idx = idx % LOCKINS_PER_ROW
 
-        # Add configure button
-        row += 1
-        self.main_window.configure_smu_button = QPushButton("Configure Source-Measure-Units")
-        smu_layout.addWidget(self.main_window.configure_smu_button, row, 0, 1, 4)
+                lockin_field = QLineEdit()
+                lockin_field.setReadOnly(True)
+                lockin_field.setText(lockin_names[idx])
+                self.main_window.lockin_name_fields.append(lockin_field)
 
-        smu_group.setLayout(smu_layout)
-        instruments_right.addWidget(smu_group)
-        instruments_right.addStretch()
+                type_combo = QComboBox()
+                type_combo.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+                type_combo.addItems(['Vdiff', 'V+', 'I', 'AuxIn1', 'AuxIn2'])
+                self.main_window.lockin_type_combos.append(type_combo)
 
-        main_layout.addWidget(instruments_left_widget)
-        main_layout.addLayout(instruments_right)
+                role_combo = QComboBox()
+                role_combo.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+                role_combo.addItems(['master', 'slave'])
+                role_combo.setCurrentIndex(0 if idx == 0 else 1)
+                self.main_window.lockin_role_combos.append(role_combo)
+
+                extref_combo = QComboBox()
+                extref_combo.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+                extref_combo.addItems(['Sig In1', 'Curr In 1', 'Trigger 1', 'Trigger 2', 'Aux In 1', 'Aux In 2'])
+                extref_combo.setCurrentIndex(2)
+                extref_combo.setVisible(idx != 0)
+                self.main_window.lockin_extref_combos.append(extref_combo)
+
+                oscillator_combo = QComboBox()
+                oscillator_combo.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+                oscillator_combo.addItems(['Trigger Out 1', 'Trigger Out 2'])
+                oscillator_combo.setVisible(idx == 0)
+                self.main_window.lockin_oscillator_combos.append(oscillator_combo)
+
+                role_combo.currentIndexChanged.connect(
+                    lambda checked, i=idx: self.on_lockin_role_changed(i)
+                )
+
+            # Multiple rows of lock-ins (6 per row); each block has 4 rows: name, type, osc source, osc in/out
+            grid_row = 0
+            for row_block in range(n_rows):
+                start = row_block * LOCKINS_PER_ROW
+                end = min(start + LOCKINS_PER_ROW, n_lockins)
+                lockins_grid.addWidget(QLabel("Lock-in name"), grid_row, 0)
+                for col in range(end - start):
+                    lockins_grid.addWidget(self.main_window.lockin_name_fields[start + col], grid_row, col + 1)
+                grid_row += 1
+                lockins_grid.addWidget(QLabel("Input channel"), grid_row, 0)
+                for col in range(end - start):
+                    lockins_grid.addWidget(self.main_window.lockin_type_combos[start + col], grid_row, col + 1)
+                grid_row += 1
+                lockins_grid.addWidget(QLabel("Osc source"), grid_row, 0)
+                for col in range(end - start):
+                    lockins_grid.addWidget(self.main_window.lockin_role_combos[start + col], grid_row, col + 1)
+                grid_row += 1
+                lockins_grid.addWidget(QLabel("Osc in/out"), grid_row, 0)
+                for col in range(end - start):
+                    osc_cell = QWidget()
+                    osc_cell_layout = QVBoxLayout()
+                    osc_cell_layout.setContentsMargins(0, 0, 0, 0)
+                    osc_cell_layout.addWidget(self.main_window.lockin_extref_combos[start + col])
+                    osc_cell_layout.addWidget(self.main_window.lockin_oscillator_combos[start + col])
+                    osc_cell.setLayout(osc_cell_layout)
+                    lockins_grid.addWidget(osc_cell, grid_row, col + 1)
+                grid_row += 1
+
+            self.main_window.lockins_group.setVisible(True)
+        else:
+            self.main_window.lockins_group.setVisible(False)
+
+        # ---- SMU: 4 per row, labels in first column ----
+        n_smu = len(smu_channel_list)
+        if n_smu > 0:
+            n_rows_smu = ceil(n_smu / SMU_CHANNELS_PER_ROW)
+            for idx in range(n_smu):
+                smu_input = QLineEdit()
+                smu_input.setReadOnly(True)
+                smu_input.setText(smu_channel_list[idx])
+                self.main_window.smu_inputs.append(smu_input)
+
+                mode_input = QComboBox()
+                mode_input.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+                mode_input.addItems(['voltage', 'current'])
+                self.main_window.smu_mode_inputs.append(mode_input)
+
+                limit_current = QDoubleSpinBox()
+                limit_current.setRange(1e-8, 1e-3)
+                limit_current.setDecimals(9)
+                limit_current.setSingleStep(1e-8)
+                self.main_window.smu_limit_current_inputs.append(limit_current)
+
+                limit_voltage = QDoubleSpinBox()
+                limit_voltage.setRange(1e-6, 200)
+                limit_voltage.setDecimals(6)
+                limit_voltage.setSingleStep(0.1)
+                self.main_window.smu_limit_voltage_inputs.append(limit_voltage)
+
+                current_range = QComboBox()
+                current_range.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+                current_range.addItems(['100nA', '1µA', '10µA', '100µA', '1mA', '10mA', '100mA', '1A'])
+                self.main_window.smu_current_range_inputs.append(current_range)
+
+                voltage_range = QComboBox()
+                voltage_range.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+                voltage_range.addItems(['20mV', '200mV', '2V', '20V', '200V'])
+                voltage_range.setCurrentIndex(3)
+                self.main_window.smu_voltage_range_inputs.append(voltage_range)
+
+                nplc = QDoubleSpinBox()
+                nplc.setRange(0.01, 10.0)
+                nplc.setDecimals(2)
+                nplc.setValue(1.00)
+                self.main_window.smu_nplc_inputs.append(nplc)
+
+                outputs_enabled = QCheckBox()
+                self.main_window.smu_outputs_enabled_inputs.append(outputs_enabled)
+
+            # Build SMU grid: 8 param blocks; each has up to n_rows_smu rows (4 channels per row)
+            smu_param_labels = [
+                "Instrument/Channel", "Mode", "Limit current (A)", "Limit voltage (V)",
+                "Current range", "Voltage range", "NPLC", "Output on"
+            ]
+            smu_param_widgets = [
+                self.main_window.smu_inputs,
+                self.main_window.smu_mode_inputs,
+                self.main_window.smu_limit_current_inputs,
+                self.main_window.smu_limit_voltage_inputs,
+                self.main_window.smu_current_range_inputs,
+                self.main_window.smu_voltage_range_inputs,
+                self.main_window.smu_nplc_inputs,
+                self.main_window.smu_outputs_enabled_inputs,
+            ]
+            grid_row = 0
+            for label, widgets in zip(smu_param_labels, smu_param_widgets):
+                for row_block in range(n_rows_smu):
+                    start = row_block * SMU_CHANNELS_PER_ROW
+                    end = min(start + SMU_CHANNELS_PER_ROW, n_smu)
+                    if row_block == 0:
+                        smu_grid.addWidget(QLabel(label), grid_row, 0)
+                    for col in range(end - start):
+                        smu_grid.addWidget(widgets[start + col], grid_row, col + 1)
+                    grid_row += 1
+
+            self.main_window.smu_group.setVisible(True)
+        else:
+            self.main_window.smu_group.setVisible(False)
 
     def on_lockin_role_changed(self, index):
         """Handle master/slave role change for lock-in amplifiers."""
+        if index >= len(self.main_window.lockin_role_combos):
+            return
         role_combo = self.main_window.lockin_role_combos[index]
         extref_combo = self.main_window.lockin_extref_combos[index]
         oscillator_combo = self.main_window.lockin_oscillator_combos[index]
-        
-        # Show ExtRef combo if 'slave' is selected, hide otherwise
-        # Show oscillator combo if 'master' is selected, hide otherwise
         if role_combo.currentText() == 'slave':
             extref_combo.setVisible(True)
             oscillator_combo.setVisible(False)

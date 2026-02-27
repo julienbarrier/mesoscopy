@@ -2,8 +2,8 @@
 from PyQt6.QtWidgets import (
     QWidget, QLabel, QPushButton, QVBoxLayout, QHBoxLayout, QFormLayout
 )
-from mesoscopy.experiments import GateGateMappingExperiment
-from mesoscopy.plotting import MplCanvas
+from mesoscopy.experiment.experiments import GateGateMappingExperiment
+from mesoscopy.core.plotting import MplCanvas
 from mesoscopy.ui.tabs.ui_helpers import update_parameter_form, get_parameters_from_widgets
 
 

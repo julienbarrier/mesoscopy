@@ -1,7 +1,7 @@
-"""Experiment execution and management."""
+"""Experiment execution and management (orchestrates runs, uses Worker and experiments)."""
 from mesoscopy.core.worker import Worker
-from mesoscopy.plotting import LivePlottingSubscriber
-from mesoscopy.experiments import TestGatesExperiment, GateGateMappingExperiment
+from mesoscopy.core.plotting import LivePlottingSubscriber
+from mesoscopy.experiment.experiments import TestGatesExperiment, GateGateMappingExperiment
 
 
 class ExperimentManager:
@@ -32,12 +32,12 @@ class ExperimentManager:
         subscriber = LivePlottingSubscriber(self.main_window.experiment_1d_tab.plot_canvas, n_points, 1)
 
         worker = Worker(
-            self._run_experiment_task, 
-            experiment_class, 
-            db_file, 
-            exp_name_str, 
-            sample_name, 
-            kwargs, 
+            self._run_experiment_task,
+            experiment_class,
+            db_file,
+            exp_name_str,
+            sample_name,
+            kwargs,
             [subscriber]
         )
         worker.signals.finished.connect(self._experiment_finished_1d)
@@ -66,18 +66,18 @@ class ExperimentManager:
 
         n_points = kwargs.get('n_points', 101)
         subscriber = LivePlottingSubscriber(
-            self.main_window.experiment_2d_tab.plot_canvas, 
-            n_points, 
+            self.main_window.experiment_2d_tab.plot_canvas,
+            n_points,
             n_points
         )
 
         worker = Worker(
-            self._run_experiment_task, 
-            experiment_class, 
-            db_file, 
-            exp_name_str, 
-            sample_name, 
-            kwargs, 
+            self._run_experiment_task,
+            experiment_class,
+            db_file,
+            exp_name_str,
+            sample_name,
+            kwargs,
             [subscriber]
         )
         worker.signals.finished.connect(self._experiment_finished_2d)
@@ -87,27 +87,22 @@ class ExperimentManager:
         self.main_window.experiment_2d_tab.run_button.setEnabled(False)
 
     def _experiment_finished_1d(self):
-        """Called when 1D experiment finishes."""
         self.main_window.statusBar().showMessage("Experiment finished.", 2000)
         self.main_window.experiment_1d_tab.run_button.setEnabled(True)
 
     def _experiment_finished_2d(self):
-        """Called when 2D experiment finishes."""
         self.main_window.statusBar().showMessage("Experiment finished.", 2000)
         self.main_window.experiment_2d_tab.run_button.setEnabled(True)
 
     def _experiment_error_1d(self, err):
-        """Handle 1D experiment error."""
         self.main_window.statusBar().showMessage(f"Experiment error: {err[1]}", 5000)
         self.main_window.experiment_1d_tab.run_button.setEnabled(True)
 
     def _experiment_error_2d(self, err):
-        """Handle 2D experiment error."""
         self.main_window.statusBar().showMessage(f"Experiment error: {err[1]}", 5000)
         self.main_window.experiment_2d_tab.run_button.setEnabled(True)
 
     def _run_experiment_task(self, experiment_class, db_file, exp_name, sample_name, kwargs, subscribers):
-        """Execute experiment in separate thread."""
         print(f"Running {exp_name} with parameters: {kwargs}")
         experiment_instance = experiment_class(self.main_window.station, db_file, exp_name, sample_name)
         experiment_instance.run(subscribers=subscribers, **kwargs)

@@ -1,15 +1,17 @@
-
+"""Plotting helpers used by experiment and measurement UI (MplCanvas, LivePlottingSubscriber)."""
 import matplotlib
 matplotlib.use('QtAgg')
 import numpy as np
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 
+
 class MplCanvas(FigureCanvas):
     def __init__(self, parent=None, width=5, height=4, dpi=100):
         fig = Figure(figsize=(width, height), dpi=dpi)
         self.axes = fig.add_subplot(111)
         super(MplCanvas, self).__init__(fig)
+
 
 class LivePlottingSubscriber:
     def __init__(self, canvas, x_dim, y_dim=1):
@@ -33,13 +35,13 @@ class LivePlottingSubscriber:
                 self.x_data[self.i, self.j] = result_list[0]
                 self.y_data[self.i, self.j] = result_list[1]
                 self.z_data[self.i, self.j] = result_list[2]
-                
+
                 self.j += 1
                 if self.j == self.y_dim:
                     self.j = 0
                     self.i += 1
-                
-                if self.j == 0: # Update plot every line
+
+                if self.j == 0:
                     self.update_plot()
         else:
             if len(result_list) >= 2:

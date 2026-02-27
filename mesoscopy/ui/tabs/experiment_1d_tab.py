@@ -2,8 +2,8 @@
 from PyQt6.QtWidgets import (
     QWidget, QLabel, QPushButton, QVBoxLayout, QHBoxLayout, QFormLayout, QComboBox, QLineEdit, QSpinBox, QCheckBox, QScrollArea, QGroupBox
 )
-from mesoscopy.experiments import TestGatesExperiment
-from mesoscopy.plotting import MplCanvas
+from mesoscopy.experiment.experiments import TestGatesExperiment
+from mesoscopy.core.plotting import MplCanvas
 from mesoscopy.ui.tabs.ui_helpers import (
     add_labeled_row,
     update_parameter_form,
