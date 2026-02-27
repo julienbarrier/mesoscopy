@@ -16,7 +16,7 @@ from qcodes import IPInstrument, VisaInstrument, Parameter
 from qcodes.instrument.parameter import _BaseParameter
 from qcodes.utils.validators import Enum, Ints, Numbers
 from qcodes.utils.helpers import create_on_off_val_mapping
-from qcodes_contrib_drivers.drivers.Oxford.IPS120 import OxfordInstruments_IPS120
+from qcodes_contrib_drivers.drivers.OxfordInstruments.IPS120 import OxfordInstruments_IPS120
 
 from time import sleep
 
