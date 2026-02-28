@@ -9,7 +9,7 @@ from tqdm.auto import tqdm
 
 from qcodes.dataset.measurements import Measurement
 from qcodes.dataset.experiment_container import Experiment
-from qcodes.instrument.parameter import _BaseParameter
+from qcodes.parameters import ParameterBase
 from qcodes.dataset.descriptions.detect_shapes import \
     detect_shape_of_measurement
 from qcodes.dataset.dond import do_nd as doNd
@@ -28,7 +28,7 @@ from .time import sweep1d_time, sweep2d_time
 
 
 def fastsweep(target,
-              param: _BaseParameter,
+              param: ParameterBase,
               step: Optional[float] = .1,
               actions: doNd.ActionsT = (),
               control: Optional[Callable] = None,
@@ -48,7 +48,7 @@ def fastsweep(target,
     return v
 
 
-def sweep1d(param_set: _BaseParameter,
+def sweep1d(param_set: ParameterBase,
             xarray,
             delay: float,
             *param_meas: doNd.ParamMeasT,
@@ -79,7 +79,7 @@ def sweep1d(param_set: _BaseParameter,
         s for s in additional_setpoints)
 
     measured_parameters = tuple(param for param in param_meas
-                                if isinstance(param, _BaseParameter))
+                                if isinstance(param, ParameterBase))
 
     if not use_threads:
         use_threads = False
@@ -140,7 +140,7 @@ def sweeptime(timeout: float,
         s for s in additional_setpoints)
 
     measured_parameters = list(param for param in param_meas
-                               if isinstance(param, _BaseParameter))
+                               if isinstance(param, ParameterBase))
 
     if not use_threads:
         use_threads = False
@@ -177,7 +177,7 @@ def sweeptime(timeout: float,
     return doNd._handle_plotting(dataset, do_plot, interrupted())
 
 
-def sweepfield(magnet: _BaseParameter,
+def sweepfield(magnet: ParameterBase,
                field_target: float,
                delay: float,
                *param_meas: doNd.ParamMeasT,
@@ -201,7 +201,7 @@ def sweepfield(magnet: _BaseParameter,
         s for s in additional_setpoints)
 
     measured_parameters = (magnet, ) + tuple(
-        param for param in param_meas if isinstance(param, _BaseParameter))
+        param for param in param_meas if isinstance(param, ParameterBase))
 
     if not use_threads:
         use_threads = False
@@ -240,10 +240,10 @@ def sweepfield(magnet: _BaseParameter,
 
 
 def sweep2d(
-    param_setx: _BaseParameter,
+    param_setx: ParameterBase,
     xarray,
     inner_delay: float,
-    param_sety: _BaseParameter,
+    param_sety: ParameterBase,
     yarray,
     outer_delay: float = .1,
     *param_meas: doNd.ParamMeasT,
@@ -280,7 +280,7 @@ def sweep2d(
     )
 
     measured_parameters = tuple(param for param in param_meas
-                                if isinstance(param, _BaseParameter))
+                                if isinstance(param, ParameterBase))
 
     if use_threads:
         _use_threads = True
@@ -362,10 +362,10 @@ def sweep2d(
 
 
 def sweepfield2d(
-    magnet: _BaseParameter,
+    magnet: ParameterBase,
     field_target: float,
     inner_delay: float,
-    param_sety: _BaseParameter,
+    param_sety: ParameterBase,
     yarray,
     outer_delay: float = .1,
     *param_meas: doNd.ParamMeasT,
@@ -388,7 +388,7 @@ def sweepfield2d(
     timeout = (field_target - field_init)/swr*60
 
     measured_parameters = tuple(param for param in param_meas
-                               if isinstance(param, _BaseParameter))
+                               if isinstance(param, ParameterBase))
     meas = Measurement(exp=exp, name=measurement_name)
     meas_retrace = Measurement(exp=exp, name=f'{measurement_name}_retrace')
 
@@ -397,7 +397,7 @@ def sweepfield2d(
     )
 
     measured_parameters = (magnet,) + tuple(
-        param for param in param_meas if isinstance(param, _BaseParameter))
+        param for param in param_meas if isinstance(param, ParameterBase))
 
     if use_threads:
         _use_threads = True

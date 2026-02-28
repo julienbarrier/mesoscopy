@@ -11,7 +11,7 @@ from typing import Optional
 
 from qcodes import Measurement, Station, ScaledParameter
 from qcodes.dataset.experiment_container import Experiment
-from qcodes.instrument.parameter import _BaseParameter
+from qcodes.parameters import ParameterBase
 from qcodes.dataset.plotting import plot_dataset
 from qcodes.dataset import do0d
 
@@ -26,7 +26,7 @@ def _fit_iv(x, R, v):
 
 def contact_IV(contact_number: int,
                station: Station,
-               *meas_param: _BaseParameter,
+               *meas_param: ParameterBase,
                exp: Optional[Experiment] = None,
                do_plot: Optional[bool] = None,
                do_fit: Optional[bool] = True,
@@ -101,7 +101,7 @@ def contact_IV(contact_number: int,
 def twoprobe_contacts(
     contact_number: int,
     station: Station,
-    *meas_param: _BaseParameter,
+    *meas_param: ParameterBase,
     exp: Optional[Experiment] = None,
     sweeprange: Optional[float] = 20,
     do_plot: Optional[bool] = None,
@@ -166,7 +166,7 @@ def twoprobe_contacts(
 
 def test_gate(label: str,
               station: Station,
-              *meas_param: _BaseParameter,
+              *meas_param: ParameterBase,
               exp: Optional[Experiment] = None,
               sweeprange: Optional[float] = 20,
               do_plot: Optional[bool] = None,

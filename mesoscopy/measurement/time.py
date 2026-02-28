@@ -11,11 +11,11 @@ from qcodes.dataset.measurement_extensions import ParamMeasT as _ParamMeasT
 from qcodes.dataset.dond.do_nd_utils import ActionsT as _ActionsT
 doNd.ParamMeasT = _ParamMeasT
 doNd.ActionsT = _ActionsT
-from qcodes.instrument.parameter import _BaseParameter
+from qcodes.parameters import ParameterBase
 from .array import generate_1D_sweep_array
 
 
-def _safesweep_time(target, param: _BaseParameter):
+def _safesweep_time(target, param: ParameterBase):
     init = param.get()
     if 'max_rate' in param._instrument.__dict__ and \
             param._instrument.max_rate() > 0.:
@@ -29,7 +29,7 @@ def _safesweep_time(target, param: _BaseParameter):
 
 
 def fastsweep_time(target,
-                   param: _BaseParameter,
+                   param: ParameterBase,
                    step: Optional[float] = .1,
                    actions: doNd.ActionsT = (),
                    control: Optional[Callable] = None,
@@ -44,7 +44,7 @@ def fastsweep_time(target,
     return t
 
 
-def sweep1d_time(param_set: _BaseParameter,
+def sweep1d_time(param_set: ParameterBase,
                  xarray,
                  delay: float,
                  ):
@@ -57,7 +57,7 @@ def sweep1d_time(param_set: _BaseParameter,
     return t
 
 
-def sweep1d_repeat(param_set: _BaseParameter,
+def sweep1d_repeat(param_set: ParameterBase,
                    xarray,
                    inner_delay: float,
                    *param_meas: doNd.ParamMeasT,
@@ -89,10 +89,10 @@ def sweep1d_repeat(param_set: _BaseParameter,
     return t
 
 
-def sweep2d_time(param_setx: _BaseParameter,
+def sweep2d_time(param_setx: ParameterBase,
                  xarray,
                  inner_delay: float,
-                 param_sety: _BaseParameter,
+                 param_sety: ParameterBase,
                  yarray,
                  outer_delay: float = .1,
                  measure_retrace: Optional[bool] = False,

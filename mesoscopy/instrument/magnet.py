@@ -8,9 +8,8 @@ from typing import Optional, Any, Union, List, Dict
 from numpy import array
 
 from qcodes import IPInstrument, VisaInstrument, Parameter
-from qcodes.instrument.parameter import _BaseParameter
+from qcodes.parameters import ParameterBase, create_on_off_val_mapping
 from qcodes.utils.validators import Enum, Ints, Numbers, Bool
-from qcodes.utils.helpers import create_on_off_val_mapping
 from qcodes_contrib_drivers.drivers.OxfordInstruments.IPS120 import OxfordInstruments_IPS120
 
 from time import sleep
@@ -21,7 +20,7 @@ from time import sleep
 # ---------------------------------
 
 
-def calibrate_magnet(param_set: _BaseParameter,
+def calibrate_magnet(param_set: ParameterBase,
                      mag_range: float = None,
                      swr: float = .15) -> None:
     if mag_range is None:
@@ -890,7 +889,7 @@ class IPS120(VisaInstrument):
         return float(return_value.split("+")[-1])
 
     def __parse_examine_status(self, return_string: str, search_type: str, digit: int) -> int:
-        matches = re.search("{}(\d+)".format(search_type), return_string)
+        matches = re.search(re.escape(search_type) + r"(\d+)", return_string)
         return int(matches.group(1)[digit])
 
 class IPSField(Parameter):

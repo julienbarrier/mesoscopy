@@ -5,9 +5,7 @@ import numpy as np
 from typing import Tuple
 from qcodes import Instrument
 from qcodes.utils.validators import Ints, Numbers
-from qcodes.instrument.parameter import _BaseParameter
-from qcodes.instrument.specialized_parameters import ElapsedTimeParameter as \
-    TimeParameter
+from qcodes.parameters import ParameterBase, ElapsedTimeParameter as TimeParameter
 from scipy.constants import e, epsilon_0
 
 
@@ -100,7 +98,7 @@ class DensityParameter(Parameter):
             drifts.
     """
     def __init__(self, name: str,
-                 gates: Tuple[_BaseParameter, _BaseParameter],
+                 gates: Tuple[ParameterBase, ParameterBase],
                  capacitances: Tuple[float, float],
                  lockD: bool = False,
                  displacement: float = 0,
@@ -176,7 +174,7 @@ class DisplacementParameter(Parameter):
             follow the density of previous measurement, with possible drifts
     """
     def __init__(self, name: str,
-                 gates: Tuple[_BaseParameter, _BaseParameter],
+                 gates: Tuple[ParameterBase, ParameterBase],
                  capacitances: Tuple[float, float],
                  lockn: bool = False,
                  density: float = 0,
@@ -253,8 +251,8 @@ class LinearParameter(Parameter):
     """
 
     def __init__(self, name: str,
-                 primary_param: _BaseParameter,
-                 dependent_param: _BaseParameter,
+                 primary_param: ParameterBase,
+                 dependent_param: ParameterBase,
                  m: float,
                  p: float,
                  *args, **kwargs):
@@ -313,7 +311,7 @@ class RampParameter(Parameter):
     def __init__(
         self,
         name: str,
-        param: _BaseParameter,
+        param: ParameterBase,
         rate: float,
         delay: float = 0.01,
         **kwargs

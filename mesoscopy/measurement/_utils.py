@@ -6,7 +6,7 @@ import time
 from numpy import all, diff
 from qcodes import Parameter
 from qcodes import validators
-from qcodes.instrument.parameter import _BaseParameter
+from qcodes.parameters import ParameterBase
 
 from .array import generate_lin_array
 
@@ -18,7 +18,7 @@ def _is_monotonic(array):
     return all(diff(array) > 0) or all(diff(array) < 0)
 
 
-def _safesweep_to(target, param: _BaseParameter):
+def _safesweep_to(target, param: ParameterBase):
     """
     function to sweep slowly to the next value in an array (target)
     """
@@ -39,7 +39,7 @@ def _safesweep_to(target, param: _BaseParameter):
     time.sleep(.0001)
 
 
-def _threshold(param: _BaseParameter, threshold=1e-9):
+def _threshold(param: ParameterBase, threshold=1e-9):
     if param.get() > threshold:
         return True
     else:

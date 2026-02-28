@@ -10,7 +10,7 @@ import zhinst.qcodes
 from zhinst.qcodes import MFLI
 from qcodes.instrument_drivers.stanford_research import SR830, SR860
 from qcodes.utils.validators import ComplexNumbers
-from qcodes.instrument.parameter import ParamRawDataType
+from qcodes.parameters import ParamRawDataType
 
 
 def init_lockin(
