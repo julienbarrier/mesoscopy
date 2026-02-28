@@ -98,7 +98,175 @@ class MainWindow(QMainWindow):
     def load_selected_instruments(self):
         """Load selected instruments from station."""
         self.station_manager.load_selected_instruments()
-    
+
+    def start_logging(self):
+        """Start qcodes command history and logger using the logs folder."""
+        log_path = self.logs_folder_display.text().strip()
+        err_label = getattr(self, "logs_error_display", None)
+        if not log_path:
+            if err_label:
+                err_label.setText("Select a logs folder first.")
+            return
+        if not __import__("os").path.isdir(log_path):
+            if err_label:
+                err_label.setText("Logs path is not a directory.")
+            return
+        try:
+            from qcodes.logger import start_command_history_logger, start_logger
+            start_command_history_logger(log_path)
+            start_logger()
+            if err_label:
+                err_label.setText("")
+            self.statusBar().showMessage("Logging started.", 2000)
+        except Exception as e:
+            if err_label:
+                err_label.setText(str(e))
+            self.statusBar().showMessage(f"Logging error: {e}", 3000)
+
+    def configure_lockins(self):
+        """Apply lock-in configuration from the UI using configure_MFLI_osc_master, configure_sr_lockin, configure_MFLI."""
+        err_label = getattr(self, "lockins_error_display", None)
+        if not self.station:
+            if err_label:
+                err_label.setText("Load a station and instruments first.")
+            return
+        lockin_names = getattr(self, "lockin_name_fields", None) or []
+        if not lockin_names:
+            if err_label:
+                err_label.setText("No lock-ins in configuration.")
+            return
+        try:
+            from mesoscopy.instrument.lockin import (
+                configure_MFLI_osc_master,
+                configure_sr_lockin,
+                configure_MFLI,
+            )
+            errors = []
+            default_freq = 377.778
+            default_tc = 0.03
+            default_order = 4
+            default_filter_slope = 24  # dB/oct for order 4
+            master_done = False
+            for idx, name_field in enumerate(lockin_names):
+                name = name_field.text().strip()
+                if not name or name not in self.station.components:
+                    continue
+                lockin = self.station.components[name]
+                class_name = lockin.__class__.__name__
+                role = "master"
+                if getattr(self, "lockin_role_combos", None) and idx < len(self.lockin_role_combos):
+                    role = self.lockin_role_combos[idx].currentText()
+                is_mfli = "MFLI" in class_name or "HF2LI" in class_name
+                is_sr = "SR830" in class_name or "SR860" in class_name or "SR865" in class_name
+                try:
+                    if is_mfli:
+                        if role == "master":
+                            configure_MFLI_osc_master(lockin, osc_idx=0, frequency=default_freq)
+                            master_done = True
+                        configure_MFLI(
+                            lockin,
+                            demod_idx=0,
+                            time_constant=default_tc,
+                            order=default_order,
+                            V_drive=None,
+                            adcselect=0 if role != "master" else None,
+                        )
+                    elif is_sr:
+                        configure_sr_lockin(
+                            lockin,
+                            time_constant=default_tc,
+                            filter_slope=default_filter_slope,
+                        )
+                except Exception as e:
+                    errors.append(f"{name}: {e}")
+            if errors:
+                if err_label:
+                    err_label.setText("\n".join(errors))
+            else:
+                if err_label:
+                    err_label.setText("")
+                self.statusBar().showMessage("Lock-ins configured.", 2000)
+        except Exception as e:
+            if err_label:
+                err_label.setText(str(e))
+            self.statusBar().showMessage(f"Configure lock-ins error: {e}", 3000)
+
+    def configure_smu(self):
+        """Apply SMU configuration from the UI using configure_smu_2614B_gate."""
+        err_label = getattr(self, "smu_error_display", None)
+        if not self.station:
+            if err_label:
+                err_label.setText("Load a station and instruments first.")
+            return
+        smu_inputs = getattr(self, "smu_inputs", None) or []
+        if not smu_inputs:
+            if err_label:
+                err_label.setText("No SMU channels in configuration.")
+            return
+        current_range_map = {
+            "100nA": 1e-7, "1µA": 1e-6, "10µA": 1e-5, "100µA": 1e-4,
+            "1mA": 1e-3, "10mA": 1e-2, "100mA": 0.1, "1A": 1.0,
+        }
+        voltage_range_map = {
+            "20mV": 0.02, "200mV": 0.2, "2V": 2.0, "20V": 20.0, "200V": 200.0,
+        }
+        try:
+            from mesoscopy.instrument.smu import configure_smu_2614B_gate
+            errors = []
+            for idx in range(len(smu_inputs)):
+                display_name = self.smu_inputs[idx].text().strip()
+                if "." in display_name:
+                    inst_name, ch = display_name.split(".", 1)
+                    ch = ch.strip().lower()
+                else:
+                    inst_name = display_name
+                    ch = None
+                if inst_name not in self.station.components:
+                    errors.append(f"{display_name}: instrument not in station")
+                    continue
+                inst = self.station.components[inst_name]
+                if ch in ("smua", "smub"):
+                    smu_ch = getattr(inst, ch, None)
+                else:
+                    smu_ch = inst
+                if smu_ch is None:
+                    errors.append(f"{display_name}: channel not found")
+                    continue
+                mode = self.smu_mode_inputs[idx].currentText()
+                limiti = self.smu_limit_current_inputs[idx].value()
+                limitv = self.smu_limit_voltage_inputs[idx].value()
+                cr_text = self.smu_current_range_inputs[idx].currentText()
+                vr_text = self.smu_voltage_range_inputs[idx].currentText()
+                measurerange_i = current_range_map.get(cr_text, 1e-7)
+                measurerange_v = voltage_range_map.get(vr_text, 20.0)
+                nplc = self.smu_nplc_inputs[idx].value()
+                output = self.smu_outputs_enabled_inputs[idx].isChecked()
+                try:
+                    configure_smu_2614B_gate(
+                        smu_ch,
+                        mode=mode,
+                        limiti=limiti,
+                        limitv=limitv,
+                        measurerange_i=measurerange_i,
+                        measurerange_v=measurerange_v,
+                        sourcerange_v=measurerange_v,
+                        nplc=nplc,
+                        output=output,
+                    )
+                except Exception as e:
+                    errors.append(f"{display_name}: {e}")
+            if errors:
+                if err_label:
+                    err_label.setText("\n".join(errors))
+            else:
+                if err_label:
+                    err_label.setText("")
+                self.statusBar().showMessage("SMU configured.", 2000)
+        except Exception as e:
+            if err_label:
+                err_label.setText(str(e))
+            self.statusBar().showMessage(f"Configure SMU error: {e}", 3000)
+
     def populate_db_files(self):
         """Populate the database file dropdown with .db files from the selected folder."""
         folder = self.db_folder_display.text()

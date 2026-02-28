@@ -1,20 +1,20 @@
-mesoscopy - QCoDeS Experiment Runner for mesoscopic physics
-==========================================================
+mesoscopy - Experiment Runner for mesoscopic physics
+====================================================
 
 |DOCS| |python versions|
 
 Mesoscopy is a graphical user interface to run experiments in mesoscopic physics. It runs with QCoDeS as a backend.
-To install and learn how to use, read `First steps with mesoscoPy <https://condmatphys.github.io/mesoscoPy/start/first-steps.html>`__.
+To install and learn how to use, read `First steps with mesoscoPy <https://mpilde.github.io/mesoscopy/start/first-steps.html>`__.
 
 Install
 =======
 
-Refer to `our documentation <https://condmatphys.github.io/mesoscoPy/start/installation.html>`__ for installation.
+Refer to `our documentation <https://mpilde.github.io/mesoscopy/start/installation.html>`__ for installation.
 
 Documentation
 =============
 
-Read it `here <https://condmatphys.github.io/mesoscoPy/>`__.
+Read it `here <https://mpilde.github.io/mesoscopy/>`__.
 Documentation is updated and deployed on every successful build in master.
 We use sphinx for the documentation. To build the documentation locally, make sure that you have the extra dependencies required:
 
@@ -44,4 +44,4 @@ See `License <https://github.com/condmatphys/mesoscoPy/tree/master/LICENSE>`__.
 
 .. |python versions| image:: https://img.shields.io/badge/python-3.13%20%7C%203.14-blue.svg
 .. |DOCS| image:: https://img.shields.io/badge/read%20-thedocs-ff66b4.svg
-   :target: http://condmatphys.github.io/mesoscoPy
+   :target: https://mpilde.github.io/mesoscopy/

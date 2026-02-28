@@ -6,6 +6,7 @@ from PyQt6.QtWidgets import (
     QComboBox, QLabel, QWidget, QDoubleSpinBox, QCheckBox, QGridLayout,
     QScrollArea,
 )
+from PyQt6.QtCore import Qt
 from mesoscopy.ui.tabs.ui_helpers import set_groupbox_title_bold
 
 LOCKINS_PER_ROW = 6
@@ -64,6 +65,12 @@ class InstrumentsTab:
         self.main_window.load_station_button.clicked.connect(self.main_window.load_station)
         station_layout.addRow(self.main_window.load_station_button)
 
+        self.main_window.station_error_display = QLabel("")
+        self.main_window.station_error_display.setWordWrap(True)
+        self.main_window.station_error_display.setStyleSheet("color: #c00; font-size: 0.9em;")
+        self.main_window.station_error_display.setAlignment(Qt.AlignmentFlag.AlignTop)
+        station_layout.addRow(self.main_window.station_error_display)
+
         instruments_left.addWidget(station_group)
 
         # Instruments group
@@ -79,6 +86,12 @@ class InstrumentsTab:
         self.main_window.load_instr_button.setEnabled(False)
         self.main_window.load_instr_button.clicked.connect(self.main_window.load_selected_instruments)
         instr_layout.addWidget(self.main_window.load_instr_button)
+
+        self.main_window.instr_error_display = QLabel("")
+        self.main_window.instr_error_display.setWordWrap(True)
+        self.main_window.instr_error_display.setStyleSheet("color: #c00; font-size: 0.9em;")
+        self.main_window.instr_error_display.setAlignment(Qt.AlignmentFlag.AlignTop)
+        instr_layout.addWidget(self.main_window.instr_error_display)
 
         instr_group.setLayout(instr_layout)
         instr_group.setMinimumHeight(500)
@@ -102,6 +115,16 @@ class InstrumentsTab:
 
         logs_layout.addRow("Logs folder:", logs_folder_layout)
 
+        self.main_window.start_logging_button = QPushButton("Start logging")
+        self.main_window.start_logging_button.clicked.connect(self.main_window.start_logging)
+        logs_layout.addRow(self.main_window.start_logging_button)
+
+        self.main_window.logs_error_display = QLabel("")
+        self.main_window.logs_error_display.setWordWrap(True)
+        self.main_window.logs_error_display.setStyleSheet("color: #c00; font-size: 0.9em;")
+        self.main_window.logs_error_display.setAlignment(Qt.AlignmentFlag.AlignTop)
+        logs_layout.addRow(self.main_window.logs_error_display)
+
         instruments_left.addWidget(logs_group)
         instruments_left.addStretch()
 
@@ -119,7 +142,12 @@ class InstrumentsTab:
         lockins_scroll.setWidget(self.main_window.lockins_scroll_content)
         lockins_layout.addWidget(lockins_scroll)
         self.main_window.configure_lockins_button = QPushButton("Configure Lock-ins")
+        self.main_window.configure_lockins_button.clicked.connect(self.main_window.configure_lockins)
         lockins_layout.addWidget(self.main_window.configure_lockins_button)
+        self.main_window.lockins_error_display = QLabel("")
+        self.main_window.lockins_error_display.setWordWrap(True)
+        self.main_window.lockins_error_display.setStyleSheet("color: #c00; font-size: 0.9em;")
+        lockins_layout.addWidget(self.main_window.lockins_error_display)
         self.main_window.lockins_group.setLayout(lockins_layout)
         self.main_window.lockins_group.setVisible(False)
         instruments_right.addWidget(self.main_window.lockins_group)
@@ -135,7 +163,12 @@ class InstrumentsTab:
         smu_scroll.setWidget(self.main_window.smu_scroll_content)
         smu_layout.addWidget(smu_scroll)
         self.main_window.configure_smu_button = QPushButton("Configure Source-Measure-Units")
+        self.main_window.configure_smu_button.clicked.connect(self.main_window.configure_smu)
         smu_layout.addWidget(self.main_window.configure_smu_button)
+        self.main_window.smu_error_display = QLabel("")
+        self.main_window.smu_error_display.setWordWrap(True)
+        self.main_window.smu_error_display.setStyleSheet("color: #c00; font-size: 0.9em;")
+        smu_layout.addWidget(self.main_window.smu_error_display)
         self.main_window.smu_group.setLayout(smu_layout)
         self.main_window.smu_group.setVisible(False)
         instruments_right.addWidget(self.main_window.smu_group)

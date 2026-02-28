@@ -13,12 +13,23 @@ class StationManager:
         self.main_window = main_window
         self.station = None
 
+    def _set_station_error(self, message):
+        """Set or clear the station error message in the UI."""
+        label = getattr(self.main_window, "station_error_display", None)
+        if label is not None:
+            label.setText(message or "")
+
     def populate_station_files(self):
         """Populate the station file dropdown with .station.yaml files from the selected folder."""
         self.main_window.station_file_combo.clear()
+        self._set_station_error("")
 
-        folder = self.main_window.station_folder_display.text()
-        if not folder or not os.path.isdir(folder):
+        folder = self.main_window.station_folder_display.text().strip()
+        if not folder:
+            self._set_station_error("Select a station folder first.")
+            return
+        if not os.path.isdir(folder):
+            self._set_station_error("Selected path is not a directory.")
             return
 
         station_files = [f for f in os.listdir(folder) if f.endswith('.station.yaml')]
@@ -28,12 +39,16 @@ class StationManager:
             self.main_window.station_file_combo.addItems(station_files)
             if len(station_files) == 1:
                 self.main_window.station_file_combo.setCurrentIndex(0)
+        else:
+            self._set_station_error("No .station.yaml files found in folder.")
 
     def load_station(self):
         """Load station from YAML configuration file."""
+        self._set_station_error("")
         try:
             config_file = self.main_window.station_file_combo.currentText()
             if not config_file:
+                self._set_station_error("Please select a station file.")
                 self.main_window.statusBar().showMessage("Please select a station file.", 2000)
                 return False
 
@@ -45,10 +60,14 @@ class StationManager:
             self.main_window.station = self.station
             self.main_window.statusBar().showMessage("Station loaded successfully.", 2000)
             self.populate_instrument_list(config_file)
+            if self.main_window.instr_list.count() == 0:
+                self._set_station_error("Station contains no instruments.")
             self.main_window.parameters_tab.populate_instruments()
             self.populate_master_lockin_dropdown()
             return True
         except Exception as e:
+            msg = str(e)
+            self._set_station_error(msg)
             self.main_window.statusBar().showMessage(f"Error loading station: {e}")
             return False
 
@@ -75,9 +94,15 @@ class StationManager:
 
     def load_selected_instruments(self):
         """Load selected instruments from station, then classify and update Lock-in/SMU config groups."""
+        err_label = getattr(self.main_window, "instr_error_display", None)
+        if err_label is not None:
+            err_label.setText("")
         if not self.station:
+            if err_label:
+                err_label.setText("Load a station first.")
             return False
 
+        errors = []
         success_count = 0
         for item in self.main_window.instr_list.selectedItems():
             name = item.text()
@@ -87,8 +112,13 @@ class StationManager:
                 self.station.load_instrument(name)
                 success_count += 1
             except Exception as e:
+                errors.append(f"{name}: {e}")
                 print(f"Error loading {name}: {e}")
-                self.main_window.statusBar().showMessage(f"Error loading {name}: {e}", 5000)
+
+        if errors and err_label:
+            err_label.setText("\n".join(errors))
+        elif err_label:
+            err_label.setText("")
 
         self.main_window.statusBar().showMessage(f"Loaded {success_count} instruments.", 3000)
 
