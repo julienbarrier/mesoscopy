@@ -52,13 +52,6 @@ def instruments_of(station):
     return {name: c for name, c in station.components.items() if isinstance(c, InstrumentBase)}
 
 
-def root_parameters_of(station):
-    """The parameters placed at the root of a station ({name: parameter})."""
-    if station is None:
-        return {}
-    return {name: c for name, c in station.components.items() if isinstance(c, ParameterBase)}
-
-
 def resolve_source(station, path):
     """The parameter at ``path`` (component names from the station root, e.g. ['dac', 'ch1']), or None."""
     if station is None or not path:

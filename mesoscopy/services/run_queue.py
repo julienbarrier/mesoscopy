@@ -143,13 +143,6 @@ class RunQueue(QObject):
             self.changed.emit()
             return copy_item
 
-    def move(self, item, new_index):
-        """Put an item at another place (the running one is not moved)."""
-        if item not in self.items or item.status == RUNNING:
-            return
-        self.items.remove(item)
-        self.items.insert(max(0, min(new_index, len(self.items))), item)
-        self.changed.emit()
 
     def clear_finished(self):
         before = len(self.items)

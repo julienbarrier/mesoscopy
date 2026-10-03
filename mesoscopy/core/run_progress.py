@@ -74,12 +74,6 @@ class RunProgress:
             return self.done
         return (self.done - 1) % self.total + 1
 
-    def repetition(self):
-        """Number (from 1) of the repetition in progress."""
-        if self.done <= 0 or self.total <= 0:
-            return 1
-        return min((self.done - 1) // self.total + 1, self.repetitions)
-
 
 def axis_positions(done, sizes):
     """Where each loop of a nested sweep is, given the number of points done.
@@ -102,18 +96,6 @@ def _total(sizes):
     for size in sizes:
         total *= size
     return total
-
-
-def estimate_seconds(axes):
-    """Run time of nested sweeps from their delays: ``axes`` = [(points, delay), ...], outermost first.
-
-    Each point of an axis waits its delay and then runs the whole inner loop. The acquisition
-    time of the instruments is not known and not included.
-    """
-    seconds = 0.0
-    for points, delay in reversed(axes):
-        seconds = points * (max(delay, 0.0) + seconds)
-    return seconds
 
 
 def format_estimate(seconds):

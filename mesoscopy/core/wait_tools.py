@@ -12,7 +12,6 @@ This module needs nothing but the standard library: "Export as Python" copies it
 calls work (a Stop does not exist there, Ctrl+C does).
 """
 import time
-from collections import namedtuple
 
 ANNOUNCE_EVERY_S = 5.0
 SLICE_S = 0.2      # a wait is cut in slices of this length, to notice a Stop quickly

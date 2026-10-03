@@ -28,44 +28,6 @@ def add_labeled_row(parent_layout, label_text, widget, *, stretch=True) -> QHBox
     return row
 
 
-def update_parameter_form(experiment_class, form_layout):
-    """Populate a form layout from an experiment class definition."""
-    while form_layout.rowCount() > 0:
-        form_layout.removeRow(0)
-
-    param_widgets = []
-    for param_def in experiment_class.parameters:
-        label = param_def['name']
-        widget = experiment_class.get_widget(param_def)
-        if 'default' in param_def:
-            param_type = param_def.get('type', 'str')
-            if param_type in ('int', 'float'):
-                widget.setValue(param_def['default'])
-            else:
-                widget.setText(str(param_def['default']))
-        form_layout.addRow(label, widget)
-        param_widgets.append(widget)
-
-    return param_widgets
-
-
-def get_parameters_from_widgets(experiment_class, param_widgets):
-    """Extract parameter values from form widgets."""
-    kwargs = {}
-
-    for i, param_def in enumerate(experiment_class.parameters):
-        widget = param_widgets[i]
-        param_name = param_def['name']
-        param_type = param_def.get('type', 'str')
-        if param_type == 'int':
-            kwargs[param_name] = widget.value()
-        elif param_type == 'float':
-            kwargs[param_name] = widget.value()
-        else:
-            kwargs[param_name] = widget.text()
-
-    return kwargs
-
 class _HiddenPauser(QObject):
     """Runs a timer only while a widget is shown. Start and stop the timer through ``start(ms)`` and ``stop()`` of this
     object: a start while the widget is hidden waits until it is shown; hiding the widget stops the timer, showing it again

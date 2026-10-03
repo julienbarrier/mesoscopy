@@ -134,6 +134,7 @@ def check_request(request, services, check_database=True):
             continue
         if len({len(v) for _, v in axis}) > 1:
             report.add(ERROR, f"Axis {number}: the parameters swept together have different numbers of points.")
+        delay = max(max((getattr(sub, "delay", 0.0) for sub in getattr(sweep, "sweeps", [sweep])), default=0.0), 0.0)  # a TogetherSweep has none of its own
         for parameter, values in axis:
             if not parameter.settable:
                 report.add(ERROR, f"{parameter.full_name} cannot be set.")
@@ -153,9 +154,9 @@ def check_request(request, services, check_database=True):
                                         f"move, from {float(current):g} to {float(values[0]):g}{_unit(parameter)}, is made in one go.")
             if len(values) > 1:
                 point_move = ramp_seconds(float(np.max(np.abs(np.diff(values)))), parameter)
-                if point_move > max(sweep.delay, 0.0) + 1e-9:
+                if point_move > delay + 1e-9:
                     report.add(INFO, f"{parameter.full_name}: each point takes at least {point_move:g} s to reach (limited by "
-                                     f"the ramp rate), more than the delay of {sweep.delay:g} s.")
+                                     f"the ramp rate), more than the delay of {delay:g} s.")
 
     points = math.prod(counts) if counts else 1
     columns = len(measured) + len(sweeps)

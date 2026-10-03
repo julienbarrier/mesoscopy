@@ -856,10 +856,6 @@ class SweepTab(QObject):
         if not unresolved:
             self._pending_state = None
 
-    # ----- measured parameters -----
-    def add_measured(self, path, alias=""):
-        """Add a measured parameter (the name of its experiment parameter, and an alias)."""
-        return self.measured_box.add(path, alias)
 
     def get_measured_parameters(self):
         """[(name in the dataset, parameter)] in list order. Raises ValueError if one is not available."""

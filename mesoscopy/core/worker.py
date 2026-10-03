@@ -1,7 +1,5 @@
-"""Worker thread implementation for running experiments."""
-import sys
-import traceback
-from PyQt6.QtCore import QObject, QRunnable, pyqtSignal, pyqtSlot
+"""The signals of an instrument job (see ``core/gateway``)."""
+from PyQt6.QtCore import QObject, pyqtSignal
 
 
 class WorkerSignals(QObject):
@@ -12,26 +10,3 @@ class WorkerSignals(QObject):
     progress = pyqtSignal(int)
 
 
-class Worker(QRunnable):
-    """Worker thread for running long-running tasks."""
-    
-    def __init__(self, fn, *args, **kwargs):
-        super(Worker, self).__init__()
-        self.fn = fn
-        self.args = args
-        self.kwargs = kwargs
-        self.signals = WorkerSignals()
-
-    @pyqtSlot()
-    def run(self):
-        """Execute the worker function."""
-        try:
-            result = self.fn(*self.args, **self.kwargs)
-        except:
-            traceback.print_exc()
-            exctype, value = sys.exc_info()[:2]
-            self.signals.error.emit((exctype, value, traceback.format_exc()))
-        else:
-            self.signals.result.emit(result)
-        finally:
-            self.signals.finished.emit()

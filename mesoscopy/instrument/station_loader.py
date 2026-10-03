@@ -1,6 +1,5 @@
 """Station loading from YAML config (no Qt)."""
 import gc
-import os
 import time
 import yaml
 import qcodes
@@ -13,11 +12,6 @@ from mesoscopy.instrument.station_config import instrument_names, read_station_c
 def get_instruments_from_yaml(config_file):
     """Names of the instruments of a station file (parameters declared at its root are not included)."""
     return instrument_names(read_station_config(config_file))
-
-
-def get_root_parameters_from_yaml(config_file):
-    """Names of the entries of a station file that are parameters at the root of the station."""
-    return root_parameter_names(read_station_config(config_file))
 
 
 def load_station_from_config(config_path):
