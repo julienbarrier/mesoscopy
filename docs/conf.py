@@ -79,7 +79,7 @@ html_show_copyright = False
 
 html_context = {
     'display_github': True,
-    'github_user': 'julienbarrier',
+    'github_user': 'mpilde',
     'github_repo': 'mesoscopy',
     'conf_py_path': 'main/docs/'
 }
