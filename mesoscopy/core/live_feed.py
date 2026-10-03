@@ -20,6 +20,7 @@ from contextlib import contextmanager
 import numpy as np
 from qcodes.dataset.sqlite.database import _convert_array, _convert_complex
 
+from mesoscopy.core.grid_data import compact_grid
 from mesoscopy.core.live_data import _single_curve
 
 _MIN_CAPACITY = 1024
@@ -138,7 +139,10 @@ class LiveRun:
         if self.uses_cache:  # keep the arrays, let go of the dataset (and with it of its connection and cache)
             try:
                 with self._lock:
-                    self._frozen = self._cache_arrays(self._rows)
+                    shaped = self._cache_shaped()
+                    # a complete grid is kept as its axes and a value matrix in 32 bits (see core/grid_data.py)
+                    complete = bool(shaped) and all(v.size == self._rows for v in shaped.values())
+                    self._frozen = compact_grid(shaped, set(self._tree)) if complete else self._cache_arrays(self._rows)
                     self._dataset = None
             except Exception:
                 self._frozen = None
@@ -163,6 +167,18 @@ class LiveRun:
         except Exception:
             return None
         return self._describe(arrays, version, completed)
+
+    def _cache_shaped(self):
+        """The plotted columns of the cache as it holds them (grid-shaped when QCoDeS knows the shape of the run)."""
+        cache = self._dataset.cache
+        if not cache.live:
+            return {}
+        columns = {}
+        for dependent, group in cache.data().items():
+            for name, values in group.items():
+                if name in self._names and name not in columns:
+                    columns[name] = np.asarray(values)
+        return columns
 
     def _cache_arrays(self, rows):
         cache = self._dataset.cache

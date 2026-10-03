@@ -81,7 +81,7 @@ class _PastRunnable(QRunnable):
             if (self.db_file, run_id) in self.known:
                 continue
             try:
-                data = fetch_run_data(self.db_file, run_id)
+                data = fetch_run_data(self.db_file, run_id, curves_only=True)
             except Exception:
                 data = None
             self.signals.run.emit(self.token, self.db_file, run_id, data)
@@ -512,14 +512,20 @@ class LivePlotPanel(QWidget):
             self.canvas.draw_idle()
             return
         fx, fy = self._factors
-        x, y = np.real(data["arrays"][xname]) * fx, data["arrays"][yname] * fy
-        n = min(len(x), len(y))
-        x, y = x[:n], y[:n]
+        x_all, y_all = data["arrays"][xname], data["arrays"][yname]
+        n = min(len(x_all), len(y_all))
+        traces = data.get("trace_length") and (xname in data["trace_axes"] + data["trace_values"]
+                                               or yname in data["trace_axes"] + data["trace_values"])
+        start = 0
+        if not data.get("single_curve", True):
+            # a map: only the sweeps that are drawn (the newest and the faded ones behind it) are worked on, not the grid
+            inner = self._row_length(data["trace_length"] if traces else None)
+            if inner and inner > 1 and n > inner:
+                start = max((-(-n // inner) - (self.past_spin.value() + 1)) * inner, 0)
+        x, y = np.real(x_all[start:n]) * fx, y_all[start:n] * fy
         complex_y = np.iscomplexobj(y)
         parts = [("Re", y.real), ("Im", y.imag)] if complex_y else [("", y)]  # drawn in C0, C1
         if n and np.isfinite(x).any() and np.isfinite(y).any():
-            traces = data.get("trace_length") and (xname in data["trace_axes"] + data["trace_values"]
-                                                   or yname in data["trace_axes"] + data["trace_values"])
             if data.get("single_curve", True):  # one curve: the earlier ones are the earlier runs
                 earlier = self._past_curves(xname, yname, fx, fy)
                 for k, (suffix, values) in enumerate(parts):
@@ -535,7 +541,7 @@ class LivePlotPanel(QWidget):
                 past = self.past_spin.value()
                 for k, (suffix, values) in enumerate(parts):
                     xs, ys = self._split_into_sweeps(x, values, data["trace_length"] if traces else None)
-                    plain = ys[-1]
+                    plain = ys[-1]  # (``x`` starts at a sweep boundary: the rows are the same as for the whole grid)
                     if slope:  # each sweep (row) has its own derivative
                         ys = np.array([derivative(row_x, row_y) for row_x, row_y in zip(xs, ys)])
                     xs, ys = xs[-(past + 1):], ys[-(past + 1):]
@@ -697,10 +703,14 @@ class LivePlotPanel(QWidget):
     def _axis_label(label, factor):
         return label if factor == 1 else f"{label} × {factor:g}"
 
+    def _row_length(self, row_length=None):
+        """Points of one row of a map: a trace, or the inner (fastest) sweep; None when it is not known."""
+        return row_length or (self._progress.inner_points if self._progress else None)
+
     def _split_into_sweeps(self, x, y, row_length=None):
         """Rows = one inner (fastest) sweep each, or one trace each (``row_length`` points); a single row for
         one-dimensional runs."""
-        inner = row_length or (self._progress.inner_points if self._progress else None)
+        inner = self._row_length(row_length)
         if inner and inner > 1 and len(x) > inner:
             rows = -(-len(x) // inner)
             pad = rows * inner - len(x)

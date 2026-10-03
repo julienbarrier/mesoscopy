@@ -6,6 +6,8 @@ from qcodes.dataset import load_by_id
 from qcodes.dataset.sqlite.database import connect
 from qcodes.dataset.sqlite.queries import get_runs
 
+from mesoscopy.core.grid_data import compact_grid
+
 
 def next_run_id(db_path):
     """run_id the next run of this database will get (1 for an empty or missing database)."""
@@ -50,13 +52,27 @@ def _row_length(values, rows):
     return max(int(values.size // max(rows, 1)), 1)
 
 
-def fetch_run_data(db_path, run_id):
+def _tree(ds):
+    """{dependent: its columns (itself first)} from the description of the run: the shape of the data, without reading it."""
+    interdeps = ds.description.interdeps
+    tree = {}
+    for top in interdeps.top_level_parameters:
+        top, dependencies, inferred = interdeps.all_parameters_in_tree_by_group(top)
+        tree[top.name] = [top.name, *(p.name for p in dependencies), *(p.name for p in inferred)]
+    return tree
+
+
+def fetch_run_data(db_path, run_id, curves_only=False):
     """Everything the live plot needs from one run, or None if the run is not in the database yet.
 
     ``arrays`` maps each plottable parameter (swept and measured) to a flat float array in
     acquisition order. While a run is in progress QCoDeS returns flat arrays; they are
     flattened here as well for finished runs, which come back reshaped to the sweep grid.
     Complex parameters stay complex (the plot draws both parts); text parameters are skipped.
+
+    A finished run of two or more dimensions is kept compact (``core/grid_data``: the unique values of each axis and the
+    value matrix in 32 bits). ``curves_only``: for the faded earlier runs, which are only drawn when they are a single
+    curve: any other run is answered without reading its data.
     """
     if not os.path.isfile(db_path):
         return None
@@ -65,21 +81,29 @@ def fetch_run_data(db_path, run_id):
         if run_id not in get_runs(conn):
             return None
         ds = load_by_id(run_id, conn=conn)
-        data = ds.get_parameter_data()
         specs = ds.paramspecs
-        arrays, setpoints, row_lengths = {}, [], {}
+        if curves_only and not _single_curve(_tree(ds), specs):
+            return {"run_id": ds.captured_run_id, "name": ds.name, "completed": bool(ds.completed), "single_curve": False,
+                    "arrays": {}}
+        data = ds.get_parameter_data()
+        arrays, setpoints, row_lengths, shaped = {}, [], {}, {}
         for dependent, columns in data.items():
             for name, values in columns.items():
-                if name in arrays:
+                if name in arrays or name in shaped:
                     continue
                 values = np.asarray(values)
                 if not np.issubdtype(values.dtype, np.number):
                     continue
                 if specs[name].type == "array":  # a trace, or the axis of one: one row per acquisition
                     row_lengths[name] = _row_length(values, ds.number_of_results)
-                arrays[name] = values.astype(complex if np.iscomplexobj(values) else float).ravel()
+                if ds.completed and values.ndim >= 2 and specs[name].type != "array":
+                    shaped[name] = values  # a finished map: kept compact below
+                else:
+                    arrays[name] = values.astype(complex if np.iscomplexobj(values) else float).ravel()
                 if name not in data:
                     setpoints.append(name)
+        if shaped:
+            arrays.update(compact_grid(shaped, set(data)))
         dependents = [name for name in data if name in arrays]
         labels = {
             name: f"{specs[name].label or name} ({specs[name].unit})" if specs[name].unit
