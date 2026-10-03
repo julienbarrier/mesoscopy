@@ -9,7 +9,9 @@ import matplotlib.pyplot as plt
 import scipy.optimize as opt
 from typing import Optional
 
-from qcodes import Measurement, Station, ScaledParameter
+from qcodes.dataset import Measurement
+from qcodes.station import Station
+from qcodes.parameters import ScaledParameter
 from qcodes.dataset.experiment_container import Experiment
 from qcodes.parameters import ParameterBase
 from qcodes.dataset.plotting import plot_dataset

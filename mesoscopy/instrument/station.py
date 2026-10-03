@@ -3,7 +3,9 @@ station initialisation
 """
 
 from typing import Optional, Tuple, Union  # , List
-from qcodes import Station, Parameter, Instrument
+from qcodes.station import Station
+from qcodes.parameters import Parameter
+from qcodes.instrument import Instrument
 
 
 def init_station(
@@ -240,13 +242,29 @@ def init_station(
     return station
 
 
-def close_station(station):
+def close_station(station, parameters=()):
     """
-    TODO: need to create this function.
-    goal:
-        a) sweep everything to 0
-        b) disconnect_instrument(name)
+    Bring ``parameters`` to 0 and disconnect every instrument of the station.
+
+    ``parameters`` are the settable parameters to bring to 0 first, at the ramp rate of their ``step`` and
+    ``inter_delay`` (the application passes the experiment parameters it has changed: what was never changed
+    is not touched). A parameter that cannot be set is reported and does not stop the others.
+    Returns the list of problems met.
     """
+    from mesoscopy.instrument.station_loader import disconnect_instrument as release
+
+    problems = []
+    for parameter in parameters:
+        try:
+            parameter.set(0)
+        except Exception as e:
+            problems.append(f"{parameter.full_name}: {e}")
+    for name in [n for n, c in station.components.items() if isinstance(c, Instrument)]:
+        try:
+            problems.extend(release(station, name)[1])
+        except Exception as e:
+            problems.append(f"{name}: {e}")
+    return problems
 
 
 def create_instrument(self, name, *arg, **kwarg):

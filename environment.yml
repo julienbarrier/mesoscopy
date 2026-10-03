@@ -20,7 +20,7 @@ dependencies:
   - pyvisa-py
   - pyserial
   - pip:
-    - zhinst
-    - zhinst-qcodes
+    - zhinst>=26.7.2
+    - zhinst-qcodes>=0.8.1
     - qcodes_contrib_drivers>=0.24.0
-    - qcodes>=0.55.0
+    - qcodes>=0.60.0

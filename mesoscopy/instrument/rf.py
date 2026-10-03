@@ -1,6 +1,7 @@
 from typing import Any
 
-from qcodes import VisaInstrument, validators as vals
+from qcodes.instrument import VisaInstrument
+import qcodes.validators as vals
 from qcodes.parameters import create_on_off_val_mapping
 
 

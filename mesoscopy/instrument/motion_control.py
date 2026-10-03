@@ -6,10 +6,11 @@ import serial
 from typing import Tuple, Optional, Union, List
 from pyvisa.resources.serial import SerialInstrument
 
-import qcodes.utils.validators as vals
-from qcodes import Instrument, Parameter, VisaInstrument
+import qcodes.validators as vals
+from qcodes.instrument import Instrument, VisaInstrument
+from qcodes.parameters import Parameter
 
-from qcodes_contrib_drivers.drivers.Thorlabs.APT import Thorlabs_APT, ThorlabsHWType
+from qcodes_contrib_drivers.drivers.Thorlabs.private.APT import Thorlabs_APT, ThorlabsHWType
 from . import _Thorlabs_error_codes as _error_codes
 
 class HomeDirection(enum.Enum):

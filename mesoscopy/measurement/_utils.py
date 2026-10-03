@@ -4,8 +4,8 @@ Some utils used in sweeps
 
 import time
 from numpy import all, diff
-from qcodes import Parameter
-from qcodes import validators
+from qcodes.parameters import Parameter
+import qcodes.validators as validators
 from qcodes.parameters import ParameterBase
 
 from .array import generate_lin_array

@@ -1,26 +1,75 @@
 """Instruments tab UI components."""
-from math import ceil
 from PyQt6.QtWidgets import (
     QLineEdit, QPushButton, QVBoxLayout, QHBoxLayout,
     QFormLayout, QGroupBox, QSizePolicy, QListWidget,
-    QComboBox, QLabel, QWidget, QDoubleSpinBox, QCheckBox, QGridLayout,
-    QScrollArea,
+    QComboBox, QLabel, QWidget, QMenu, QFileDialog,
 )
-from PyQt6.QtCore import Qt
-from mesoscopy.ui.tabs.ui_helpers import set_groupbox_title_bold
+import os
 
-LOCKINS_PER_ROW = 6
-SMU_CHANNELS_PER_ROW = 4
+from PyQt6.QtCore import QObject, Qt, pyqtSignal
+from mesoscopy.ui.station_manager import StationManager
+from mesoscopy.ui.tabs.instrument_detail import InstrumentDetailPanel
+from mesoscopy.ui.tabs.instrument_status import InstrumentStatusDelegate
+from mesoscopy.ui.tabs.ui_helpers import make_text_selectable, set_groupbox_title_bold
 
+class InstrumentsTab(QObject):
+    """Instruments tab: load a station and its instruments, and follow the connected ones.
 
-class InstrumentsTab:
-    """Instruments tab for station and instrument configuration."""
+    Instrument setup (presets and aliases) comes from the station file, not from this tab.
+    """
 
-    def __init__(self, tab_widget, main_window):
+    # the actions of the right-click menu that the snapshot loader carries out (the application connects them)
+    saveStateRequested = pyqtSignal(str)
+    restoreFromFileRequested = pyqtSignal(str)
+    restoreFromRunRequested = pyqtSignal(str)
+
+    def __init__(self, tab_widget, services):
+        super().__init__()  # a QObject: it has signals
         self.tab = tab_widget
-        self.main_window = main_window
-        self.slave_lockin_combos = {}
+        self.services = services
+        self.manager = StationManager(self, services)  # loads stations and instruments, fills the lists
         self.setup_ui()
+
+    # ----- folders and files, for the session and the settings -----
+    def _browse_station_folder(self):
+        start = self.station_folder_display.text().strip() or self.services.settings.default_folder("station") or "./"
+        folder = QFileDialog.getExistingDirectory(self.tab, "Select Station Folder", start)
+        if folder:
+            self.station_folder_display.setText(folder)
+        return folder
+
+    def select_station_folder(self):
+        if self._browse_station_folder():
+            self.manager.populate_station_files()
+
+    def set_station_folder(self, folder):
+        """Use ``folder`` as the station folder and list its station files (ignored if it is not a folder)."""
+        if folder and os.path.isdir(folder):
+            self.station_folder_display.setText(folder)
+            self.manager.populate_station_files()
+
+    def set_station_file(self, name):
+        if name and self.station_file_combo.findText(name) >= 0:
+            self.station_file_combo.setCurrentText(name)
+
+    def apply_default_folders(self):
+        self.set_station_folder(self.services.settings.default_folder("station"))
+
+    def register_session_fields(self, fields):
+        fields.register("instruments/station_folder", self.station_folder_display.text, self.set_station_folder)
+        fields.register("instruments/station_file", self.station_file_combo.currentText, self.set_station_file)
+
+    def load_last_station(self):
+        """Load the station file used last (the Settings ask for it at start)."""
+        last = self.services.settings.last_station
+        if last and os.path.isfile(last):
+            self.set_station_folder(os.path.dirname(last))
+            self.set_station_file(os.path.basename(last))
+            self.manager.load_station()
+
+    def shutdown(self):
+        self.instrument_detail.shutdown()
+        self.manager.disconnect_all_instruments()
 
     def setup_ui(self):
         """Set up the instruments tab UI."""
@@ -40,36 +89,37 @@ class InstrumentsTab:
         station_layout.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.ExpandingFieldsGrow)
         station_group.setLayout(station_layout)
 
-        self.main_window.station_folder_display = QLineEdit()
-        self.main_window.station_folder_display.setReadOnly(True)
-        self.main_window.station_folder_display.setPlaceholderText("Station folder")
-        self.main_window.station_folder_button = QPushButton("Browse...")
-        self.main_window.station_folder_button.clicked.connect(self.main_window.select_station_folder)
+        self.station_folder_display = QLineEdit()
+        self.station_folder_display.setReadOnly(True)
+        self.station_folder_display.setPlaceholderText("Station folder")
+        self.station_folder_button = QPushButton("Browse...")
+        self.station_folder_button.clicked.connect(self.select_station_folder)
 
         station_folder_layout = QHBoxLayout()
-        station_folder_layout.addWidget(self.main_window.station_folder_display)
-        station_folder_layout.addWidget(self.main_window.station_folder_button)
+        station_folder_layout.addWidget(self.station_folder_display)
+        station_folder_layout.addWidget(self.station_folder_button)
 
-        self.main_window.station_file_combo = QComboBox()
-        self.main_window.station_file_combo.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-        self.main_window.station_file_combo.setPlaceholderText("Station file")
+        self.station_file_combo = QComboBox()
+        self.station_file_combo.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self.station_file_combo.setPlaceholderText("Station file")
 
         station_fields_layout = QVBoxLayout()
         station_fields_layout.setSpacing(0)
         station_fields_layout.addLayout(station_folder_layout)
-        station_fields_layout.addWidget(self.main_window.station_file_combo)
+        station_fields_layout.addWidget(self.station_file_combo)
 
         station_layout.addRow(station_fields_layout)
 
-        self.main_window.load_station_button = QPushButton("Load Station")
-        self.main_window.load_station_button.clicked.connect(self.main_window.load_station)
-        station_layout.addRow(self.main_window.load_station_button)
+        self.load_station_button = QPushButton("Load Station")
+        self.load_station_button.clicked.connect(self.manager.load_station)
+        self.services.measuring.gate(self.load_station_button)  # refused while a measurement runs
+        station_layout.addRow(self.load_station_button)
 
-        self.main_window.station_error_display = QLabel("")
-        self.main_window.station_error_display.setWordWrap(True)
-        self.main_window.station_error_display.setStyleSheet("color: #c00; font-size: 0.9em;")
-        self.main_window.station_error_display.setAlignment(Qt.AlignmentFlag.AlignTop)
-        station_layout.addRow(self.main_window.station_error_display)
+        self.station_error_display = make_text_selectable(QLabel(""))
+        self.station_error_display.setWordWrap(True)
+        self.station_error_display.setStyleSheet("color: #c00; font-size: 0.9em;")
+        self.station_error_display.setAlignment(Qt.AlignmentFlag.AlignTop)
+        station_layout.addRow(self.station_error_display)
 
         instruments_left.addWidget(station_group)
 
@@ -78,413 +128,127 @@ class InstrumentsTab:
         set_groupbox_title_bold(instr_group)
         instr_layout = QVBoxLayout()
 
-        self.main_window.instr_list = QListWidget()
-        self.main_window.instr_list.setSelectionMode(QListWidget.SelectionMode.MultiSelection)
-        instr_layout.addWidget(self.main_window.instr_list)
+        self.instr_list = QListWidget()
+        self.instr_list.setSelectionMode(QListWidget.SelectionMode.MultiSelection)
+        instr_layout.addWidget(self.instr_list)
 
-        self.main_window.load_instr_button = QPushButton("Load Selected Instruments")
-        self.main_window.load_instr_button.setEnabled(False)
-        self.main_window.load_instr_button.clicked.connect(self.main_window.load_selected_instruments)
-        instr_layout.addWidget(self.main_window.load_instr_button)
+        self.load_instr_button = QPushButton("Load Selected Instruments")
+        self.load_instr_button.setEnabled(False)
+        self.services.measuring.gate(self.load_instr_button)
+        self.load_instr_button.clicked.connect(self.manager.load_selected_instruments)
+        instr_layout.addWidget(self.load_instr_button)
 
-        self.main_window.instr_error_display = QLabel("")
-        self.main_window.instr_error_display.setWordWrap(True)
-        self.main_window.instr_error_display.setStyleSheet("color: #c00; font-size: 0.9em;")
-        self.main_window.instr_error_display.setAlignment(Qt.AlignmentFlag.AlignTop)
-        instr_layout.addWidget(self.main_window.instr_error_display)
+        self.instr_error_display = make_text_selectable(QLabel(""))
+        self.instr_error_display.setWordWrap(True)
+        self.instr_error_display.setStyleSheet("color: #c00; font-size: 0.9em;")
+        self.instr_error_display.setAlignment(Qt.AlignmentFlag.AlignTop)
+        instr_layout.addWidget(self.instr_error_display)
 
         instr_group.setLayout(instr_layout)
         instr_group.setMinimumHeight(500)
         instruments_left.addWidget(instr_group)
 
-        # Logs group
-        logs_group = QGroupBox("Logs")
-        set_groupbox_title_bold(logs_group)
-        logs_layout = QFormLayout()
-        logs_layout.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.ExpandingFieldsGrow)
-        logs_group.setLayout(logs_layout)
+        # Second column - Connected instruments (all components of the loaded station)
+        connected_widget = QWidget()
+        connected_widget.setMaximumWidth(280)
+        connected_widget.setVisible(False)  # shown once a station is loaded
+        self.connected_widget = connected_widget
+        connected_column = QVBoxLayout()
+        connected_widget.setLayout(connected_column)
 
-        self.main_window.logs_folder_display = QLineEdit()
-        self.main_window.logs_folder_display.setReadOnly(True)
-        self.main_window.logs_folder_button = QPushButton("Browse...")
-        self.main_window.logs_folder_button.clicked.connect(self.main_window.select_logs_folder)
+        connected_group = QGroupBox("Connected instruments")
+        set_groupbox_title_bold(connected_group)
+        connected_layout = QVBoxLayout()
 
-        logs_folder_layout = QHBoxLayout()
-        logs_folder_layout.addWidget(self.main_window.logs_folder_display)
-        logs_folder_layout.addWidget(self.main_window.logs_folder_button)
+        self.connected_instr_list = QListWidget()
+        # one instrument at a time: the panel on the right follows the selected instrument
+        self.connected_instr_list.setSelectionMode(QListWidget.SelectionMode.SingleSelection)
+        self.connected_instr_list.setItemDelegate(
+            InstrumentStatusDelegate(self.connected_instr_list)
+        )
+        self.connected_instr_list.setMouseTracking(True)  # hover tooltips
+        self.connected_instr_list.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.connected_instr_list.customContextMenuRequested.connect(self._connected_context_menu)
+        connected_layout.addWidget(self.connected_instr_list, 1)  # takes the height that is left
 
-        logs_layout.addRow("Logs folder:", logs_folder_layout)
+        self.update_snapshot_button = QPushButton("Update Snapshot of Selected")
+        self.update_snapshot_button.setToolTip(
+            "Read every parameter of the selected instruments again, so that the values QCoDeS keeps (and stores "
+            "in the snapshot of the next run) include changes made outside the application."
+        )
+        self.update_snapshot_button.setEnabled(False)
+        self.services.measuring.gate(self.update_snapshot_button)
+        self.update_snapshot_button.clicked.connect(
+            lambda: self.manager.update_selected_snapshots()
+        )
+        connected_layout.addWidget(self.update_snapshot_button)
 
-        self.main_window.start_logging_button = QPushButton("Start logging")
-        self.main_window.start_logging_button.clicked.connect(self.main_window.start_logging)
-        logs_layout.addRow(self.main_window.start_logging_button)
+        self.reconnect_instr_button = QPushButton("Reconnect Selected")
+        self.reconnect_instr_button.setVisible(False)  # shown when an instrument stops responding
+        self.services.measuring.gate(self.reconnect_instr_button)
+        self.reconnect_instr_button.clicked.connect(self.manager.reconnect_selected_instruments)
+        connected_layout.addWidget(self.reconnect_instr_button)
 
-        self.main_window.logs_error_display = QLabel("")
-        self.main_window.logs_error_display.setWordWrap(True)
-        self.main_window.logs_error_display.setStyleSheet("color: #c00; font-size: 0.9em;")
-        self.main_window.logs_error_display.setAlignment(Qt.AlignmentFlag.AlignTop)
-        logs_layout.addRow(self.main_window.logs_error_display)
+        self.disconnect_instr_button = QPushButton("Disconnect Selected")
+        self.disconnect_instr_button.setEnabled(False)
+        self.services.measuring.gate(self.disconnect_instr_button)
+        self.disconnect_instr_button.clicked.connect(self.manager.disconnect_selected_instruments)
+        connected_layout.addWidget(self.disconnect_instr_button)
 
-        instruments_left.addWidget(logs_group)
+        self.connected_error_display = make_text_selectable(QLabel(""))
+        self.connected_error_display.setWordWrap(True)
+        self.connected_error_display.setStyleSheet("color: #c00; font-size: 0.9em;")
+        self.connected_error_display.setAlignment(Qt.AlignmentFlag.AlignTop)
+        self.connected_error_display.setVisible(False)  # only shown when there is an error
+        connected_layout.addWidget(self.connected_error_display)
+
+        connected_group.setLayout(connected_layout)
+        connected_column.addWidget(connected_group)
+
         instruments_left.addStretch()
 
-        # Right side - Lock-ins and SMU config (populated after "Load selected instruments")
-        instruments_right = QVBoxLayout()
-
-        # Lock-ins Configuration group: content built in populate_lockin_smu_config
-        self.main_window.lockins_group = QGroupBox("Lock-ins Configuration")
-        set_groupbox_title_bold(self.main_window.lockins_group)
-        lockins_layout = QVBoxLayout()
-        lockins_scroll = QScrollArea()
-        lockins_scroll.setWidgetResizable(True)
-        self.main_window.lockins_scroll_content = QWidget()
-        self.main_window.lockins_scroll_content.setLayout(QGridLayout())
-        lockins_scroll.setWidget(self.main_window.lockins_scroll_content)
-        lockins_layout.addWidget(lockins_scroll)
-        self.main_window.configure_lockins_button = QPushButton("Configure Lock-ins")
-        self.main_window.configure_lockins_button.clicked.connect(self.main_window.configure_lockins)
-        lockins_layout.addWidget(self.main_window.configure_lockins_button)
-        self.main_window.lockins_error_display = QLabel("")
-        self.main_window.lockins_error_display.setWordWrap(True)
-        self.main_window.lockins_error_display.setStyleSheet("color: #c00; font-size: 0.9em;")
-        lockins_layout.addWidget(self.main_window.lockins_error_display)
-        self.main_window.lockins_group.setLayout(lockins_layout)
-        self.main_window.lockins_group.setVisible(False)
-        instruments_right.addWidget(self.main_window.lockins_group)
-
-        # SMU Configuration group: content built in populate_lockin_smu_config
-        self.main_window.smu_group = QGroupBox("SMU Configuration")
-        set_groupbox_title_bold(self.main_window.smu_group)
-        smu_layout = QVBoxLayout()
-        smu_scroll = QScrollArea()
-        smu_scroll.setWidgetResizable(True)
-        self.main_window.smu_scroll_content = QWidget()
-        self.main_window.smu_scroll_content.setLayout(QGridLayout())
-        smu_scroll.setWidget(self.main_window.smu_scroll_content)
-        smu_layout.addWidget(smu_scroll)
-        self.main_window.configure_smu_button = QPushButton("Configure Source-Measure-Units")
-        self.main_window.configure_smu_button.clicked.connect(self.main_window.configure_smu)
-        smu_layout.addWidget(self.main_window.configure_smu_button)
-        self.main_window.smu_error_display = QLabel("")
-        self.main_window.smu_error_display.setWordWrap(True)
-        self.main_window.smu_error_display.setStyleSheet("color: #c00; font-size: 0.9em;")
-        smu_layout.addWidget(self.main_window.smu_error_display)
-        self.main_window.smu_group.setLayout(smu_layout)
-        self.main_window.smu_group.setVisible(False)
-        instruments_right.addWidget(self.main_window.smu_group)
-        instruments_right.addStretch()
-
         main_layout.addWidget(instruments_left_widget)
-        main_layout.addLayout(instruments_right)
-        main_layout.addStretch(1)  # Flush left column when Lock-ins/SMU groups are hidden
+        main_layout.addWidget(connected_widget)
 
-    def _clear_layout(self, layout):
-        """Remove all widgets from a layout and delete them."""
-        while layout.count():
-            item = layout.takeAt(0)
-            if item.widget():
-                item.widget().deleteLater()
-            elif item.layout():
-                self._clear_layout(item.layout())
+        # Third column - command log / raw command / snapshot of the selected instrument, over the space that is left
+        self.instrument_detail = InstrumentDetailPanel(self.services)
+        self.connected_instr_list.itemSelectionChanged.connect(self._selection_changed)
+        main_layout.addWidget(self.instrument_detail, 1)
+        main_layout.addStretch(0)  # takes the space while the panel is hidden
 
-    def populate_lockin_smu_config(self, lockin_names, smu_channel_list):
-        """
-        Build Lock-ins and SMU configuration grids from loaded instruments.
-        lockin_names: list of instrument names that are lock-ins.
-        smu_channel_list: list of display names e.g. ["keithley1.smua", "keithley1.smub"].
-        Groups are shown only if they have at least one entry.
-        """
-        self.main_window.lockin_name_fields = []
-        self.main_window.lockin_type_combos = []
-        self.main_window.lockin_role_combos = []
-        self.main_window.lockin_extref_combos = []
-        self.main_window.lockin_oscillator_combos = []
-        self.main_window.smu_inputs = []
-        self.main_window.smu_mode_inputs = []
-        self.main_window.smu_limit_current_inputs = []
-        self.main_window.smu_limit_voltage_inputs = []
-        self.main_window.smu_current_range_inputs = []
-        self.main_window.smu_voltage_range_inputs = []
-        self.main_window.smu_nplc_inputs = []
-        self.main_window.smu_outputs_enabled_inputs = []
-
-        lockins_grid = self.main_window.lockins_scroll_content.layout()
-        smu_grid = self.main_window.smu_scroll_content.layout()
-        self._clear_layout(lockins_grid)
-        self._clear_layout(smu_grid)
-
-        # ---- Lock-ins: 6 per row, labels in first column ----
-        n_lockins = len(lockin_names)
-        if n_lockins > 0:
-            n_rows = ceil(n_lockins / LOCKINS_PER_ROW)
-            for idx in range(n_lockins):
-                row_idx = idx // LOCKINS_PER_ROW
-                col_idx = idx % LOCKINS_PER_ROW
-
-                lockin_field = QLineEdit()
-                lockin_field.setReadOnly(True)
-                lockin_field.setText(lockin_names[idx])
-                self.main_window.lockin_name_fields.append(lockin_field)
-
-                type_combo = QComboBox()
-                type_combo.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-                type_combo.addItems(['Vdiff', 'V+', 'I', 'AuxIn1', 'AuxIn2'])
-                self.main_window.lockin_type_combos.append(type_combo)
-
-                role_combo = QComboBox()
-                role_combo.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-                role_combo.addItems(['master', 'slave'])
-                role_combo.setCurrentIndex(0 if idx == 0 else 1)
-                self.main_window.lockin_role_combos.append(role_combo)
-
-                extref_combo = QComboBox()
-                extref_combo.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-                extref_combo.addItems(['Sig In1', 'Curr In 1', 'Trigger 1', 'Trigger 2', 'Aux In 1', 'Aux In 2'])
-                extref_combo.setCurrentIndex(2)
-                extref_combo.setVisible(idx != 0)
-                self.main_window.lockin_extref_combos.append(extref_combo)
-
-                oscillator_combo = QComboBox()
-                oscillator_combo.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-                oscillator_combo.addItems(['Trigger Out 1', 'Trigger Out 2'])
-                oscillator_combo.setVisible(idx == 0)
-                self.main_window.lockin_oscillator_combos.append(oscillator_combo)
-
-                role_combo.currentIndexChanged.connect(
-                    lambda checked, i=idx: self.on_lockin_role_changed(i)
-                )
-
-            # Multiple rows of lock-ins (6 per row); each block has 4 rows: name, type, osc source, osc in/out
-            grid_row = 0
-            for row_block in range(n_rows):
-                start = row_block * LOCKINS_PER_ROW
-                end = min(start + LOCKINS_PER_ROW, n_lockins)
-                lockins_grid.addWidget(QLabel("Lock-in name"), grid_row, 0)
-                for col in range(end - start):
-                    lockins_grid.addWidget(self.main_window.lockin_name_fields[start + col], grid_row, col + 1)
-                grid_row += 1
-                lockins_grid.addWidget(QLabel("Input channel"), grid_row, 0)
-                for col in range(end - start):
-                    lockins_grid.addWidget(self.main_window.lockin_type_combos[start + col], grid_row, col + 1)
-                grid_row += 1
-                lockins_grid.addWidget(QLabel("Osc source"), grid_row, 0)
-                for col in range(end - start):
-                    lockins_grid.addWidget(self.main_window.lockin_role_combos[start + col], grid_row, col + 1)
-                grid_row += 1
-                lockins_grid.addWidget(QLabel("Osc in/out"), grid_row, 0)
-                for col in range(end - start):
-                    osc_cell = QWidget()
-                    osc_cell_layout = QVBoxLayout()
-                    osc_cell_layout.setContentsMargins(0, 0, 0, 0)
-                    osc_cell_layout.addWidget(self.main_window.lockin_extref_combos[start + col])
-                    osc_cell_layout.addWidget(self.main_window.lockin_oscillator_combos[start + col])
-                    osc_cell.setLayout(osc_cell_layout)
-                    lockins_grid.addWidget(osc_cell, grid_row, col + 1)
-                grid_row += 1
-
-            self.main_window.lockins_group.setVisible(True)
-        else:
-            self.main_window.lockins_group.setVisible(False)
-
-        # ---- SMU: 4 per row, labels in first column ----
-        n_smu = len(smu_channel_list)
-        if n_smu > 0:
-            n_rows_smu = ceil(n_smu / SMU_CHANNELS_PER_ROW)
-            for idx in range(n_smu):
-                smu_input = QLineEdit()
-                smu_input.setReadOnly(True)
-                smu_input.setText(smu_channel_list[idx])
-                self.main_window.smu_inputs.append(smu_input)
-
-                mode_input = QComboBox()
-                mode_input.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-                mode_input.addItems(['voltage', 'current'])
-                self.main_window.smu_mode_inputs.append(mode_input)
-
-                limit_current = QDoubleSpinBox()
-                limit_current.setRange(1e-8, 1e-3)
-                limit_current.setDecimals(9)
-                limit_current.setSingleStep(1e-8)
-                self.main_window.smu_limit_current_inputs.append(limit_current)
-
-                limit_voltage = QDoubleSpinBox()
-                limit_voltage.setRange(1e-6, 200)
-                limit_voltage.setDecimals(6)
-                limit_voltage.setSingleStep(0.1)
-                self.main_window.smu_limit_voltage_inputs.append(limit_voltage)
-
-                current_range = QComboBox()
-                current_range.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-                current_range.addItems(['100nA', '1µA', '10µA', '100µA', '1mA', '10mA', '100mA', '1A'])
-                self.main_window.smu_current_range_inputs.append(current_range)
-
-                voltage_range = QComboBox()
-                voltage_range.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-                voltage_range.addItems(['20mV', '200mV', '2V', '20V', '200V'])
-                voltage_range.setCurrentIndex(3)
-                self.main_window.smu_voltage_range_inputs.append(voltage_range)
-
-                nplc = QDoubleSpinBox()
-                nplc.setRange(0.01, 10.0)
-                nplc.setDecimals(2)
-                nplc.setValue(1.00)
-                self.main_window.smu_nplc_inputs.append(nplc)
-
-                outputs_enabled = QCheckBox()
-                self.main_window.smu_outputs_enabled_inputs.append(outputs_enabled)
-
-            # Build SMU grid: 8 param blocks; each has up to n_rows_smu rows (4 channels per row)
-            smu_param_labels = [
-                "Instrument/Channel", "Mode", "Limit current (A)", "Limit voltage (V)",
-                "Current range", "Voltage range", "NPLC", "Output on"
-            ]
-            smu_param_widgets = [
-                self.main_window.smu_inputs,
-                self.main_window.smu_mode_inputs,
-                self.main_window.smu_limit_current_inputs,
-                self.main_window.smu_limit_voltage_inputs,
-                self.main_window.smu_current_range_inputs,
-                self.main_window.smu_voltage_range_inputs,
-                self.main_window.smu_nplc_inputs,
-                self.main_window.smu_outputs_enabled_inputs,
-            ]
-            grid_row = 0
-            for label, widgets in zip(smu_param_labels, smu_param_widgets):
-                for row_block in range(n_rows_smu):
-                    start = row_block * SMU_CHANNELS_PER_ROW
-                    end = min(start + SMU_CHANNELS_PER_ROW, n_smu)
-                    if row_block == 0:
-                        smu_grid.addWidget(QLabel(label), grid_row, 0)
-                    for col in range(end - start):
-                        smu_grid.addWidget(widgets[start + col], grid_row, col + 1)
-                    grid_row += 1
-
-            self.main_window.smu_group.setVisible(True)
-        else:
-            self.main_window.smu_group.setVisible(False)
-
-    def on_lockin_role_changed(self, index):
-        """Handle master/slave role change for lock-in amplifiers."""
-        if index >= len(self.main_window.lockin_role_combos):
+    def _connected_context_menu(self, position):
+        """Right click on a connected instrument: update its snapshot, save or restore its state, disconnect it."""
+        item = self.connected_instr_list.itemAt(position)
+        if item is None:
             return
-        role_combo = self.main_window.lockin_role_combos[index]
-        extref_combo = self.main_window.lockin_extref_combos[index]
-        oscillator_combo = self.main_window.lockin_oscillator_combos[index]
-        if role_combo.currentText() == 'slave':
-            extref_combo.setVisible(True)
-            oscillator_combo.setVisible(False)
-        else:
-            extref_combo.setVisible(False)
-            oscillator_combo.setVisible(True)
+        name = item.text()
+        manager = self.manager
+        menu = QMenu(self.connected_instr_list)
+        actions = {}
 
-    def on_master_lockin_changed(self):
-        """Handle master lock-in selection change and populate oscillator output parameters and slave lock-ins."""
-        master_lockin_name = self.main_window.master_lockin_combo.currentText()
+        def add(text, tip, callback):
+            action = menu.addAction(text)
+            action.setToolTip(tip)
+            self.services.measuring.block(action)  # every entry works on the instrument: not while a measurement runs
+            actions[action] = callback
 
-        # Update oscillator output dropdown
-        self.main_window.oscillator_output_combo.blockSignals(True)
-        self.main_window.oscillator_output_combo.clear()
+        add(f"Update snapshot of {name}", "Read every parameter of this instrument again (snapshot with update).",
+            lambda: manager.update_snapshots([name]))
+        menu.addSeparator()
+        add(f"Save state of {name} to file...", "Read all its parameters, then save them (and its experiment "
+            "parameters) as a JSON file.", lambda: self.saveStateRequested.emit(name))
+        add(f"Restore state of {name} from file...", "Set its parameters and experiment parameters from a saved "
+            "JSON file. You review the changes first.", lambda: self.restoreFromFileRequested.emit(name))
+        add(f"Restore state of {name} from a run...", "Set its parameters and experiment parameters as they "
+            "were in the snapshot of a run. You review the changes first.",
+            lambda: self.restoreFromRunRequested.emit(name))
+        menu.addSeparator()
+        add(f"Disconnect {name}", "Close this instrument and remove it from the station.",
+            lambda: manager.disconnect_instruments([name]))
+        chosen = menu.exec(self.connected_instr_list.viewport().mapToGlobal(position))
+        if chosen in actions:
+            actions[chosen]()
 
-        # Update slave lock-ins
-        self.populate_slave_lockins(master_lockin_name)
-
-        if not self.main_window.station or not master_lockin_name:
-            self.main_window.oscillator_output_combo.blockSignals(False)
-            return
-
-        try:
-            # Get the master lock-in instrument
-            instrument = self.main_window.station.components.get(master_lockin_name)
-            if not instrument:
-                self.main_window.oscillator_output_combo.blockSignals(False)
-                return
-
-            # Get all oscillator parameters (oscs, oscs[index].freq, etc.)
-            osc_parameters = []
-            for attr_name in dir(instrument):
-                if not attr_name.startswith('_'):
-                    try:
-                        attr = getattr(instrument, attr_name)
-                        # Look for oscillator related attributes
-                        if 'osc' in attr_name.lower() or 'freq' in attr_name.lower():
-                            if hasattr(attr, '__len__'):
-                                # Handle indexed oscillators like oscs[0], oscs[1], etc.
-                                try:
-                                    for idx in range(len(attr)):
-                                        osc_parameters.append(f"{attr_name}[{idx}]")
-                                except Exception:
-                                    osc_parameters.append(attr_name)
-                            else:
-                                osc_parameters.append(attr_name)
-                    except Exception:
-                        pass
-
-            # Add oscillator parameters to dropdown
-            osc_parameters.sort()
-            self.main_window.oscillator_output_combo.addItems(osc_parameters)
-        except Exception as e:
-            print(f"Error populating oscillator output parameters: {e}")
-
-        self.main_window.oscillator_output_combo.blockSignals(False)
-
-    def populate_slave_lockins(self, master_lockin_name):
-        """Populate slave lock-in dropdowns based on master lock-in selection."""
-        # Clear existing slave lock-in rows
-        while self.slave_lockins_layout.rowCount() > 0:
-            self.slave_lockins_layout.removeRow(0)
-        self.slave_lockin_combos.clear()
-
-        if not self.main_window.station or not master_lockin_name:
-            return
-
-        try:
-            # Get all instruments
-            components = self.main_window.station.components
-            slave_lockin_types = ('SR830', 'SR860', 'SR865', 'MFLI', 'HF2LI')
-
-            # Find all slave lock-ins (exclude master lock-in)
-            slave_lockins = []
-            for name, instrument in components.items():
-                if name != master_lockin_name:
-                    instrument_class = instrument.__class__.__name__
-                    if any(ltype in instrument_class for ltype in slave_lockin_types):
-                        slave_lockins.append((name, instrument))
-
-            # Create rows for each slave lock-in
-            for slave_name, slave_instrument in sorted(slave_lockins):
-                # Create dropdown for slave lock-in parameters
-                slave_combo = QComboBox()
-                slave_combo.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-
-                # Get all parameters (oscillator/demod related) from slave lock-in
-                slave_parameters = []
-                for attr_name in dir(slave_instrument):
-                    if not attr_name.startswith('_'):
-                        try:
-                            attr = getattr(slave_instrument, attr_name)
-                            # Look for oscillator, demod, or measurement related attributes
-                            if any(keyword in attr_name.lower() for keyword in ['osc', 'demod', 'freq', 'sample']):
-                                if hasattr(attr, '__len__'):
-                                    # Handle indexed attributes like demods[0], demods[1], etc.
-                                    try:
-                                        for idx in range(len(attr)):
-                                            slave_parameters.append(f"{attr_name}[{idx}]")
-                                    except Exception:
-                                        slave_parameters.append(attr_name)
-                                else:
-                                    slave_parameters.append(attr_name)
-                        except Exception:
-                            pass
-
-                # Add parameters to dropdown
-                slave_parameters.sort()
-                slave_combo.addItems(slave_parameters)
-
-                # Store the combo box with the slave lock-in name as key
-                self.slave_lockin_combos[slave_name] = slave_combo
-
-                # Add row to the layout
-                self.slave_lockins_layout.addRow(slave_name, slave_combo)
-
-        except Exception as e:
-            print(f"Error populating slave lock-ins: {e}")
+    def _selection_changed(self):
+        names = [item.text() for item in self.connected_instr_list.selectedItems()]
+        self.instrument_detail.set_selection(names)

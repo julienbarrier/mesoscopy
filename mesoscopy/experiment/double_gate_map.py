@@ -6,12 +6,12 @@ MFLI lock-in amplifiers
 
 from typing import Optional
 
-from qcodes import Station, Instrument
+from qcodes.station import Station
+from qcodes.instrument import Instrument
 from qcodes.dataset.experiment_container import Experiment
 
 import zhinst.qcodes
 
-from ..instrument.smu import init_smu
 from ..measurement.sweep import sweep2d, fastsweep
 
 
@@ -25,10 +25,8 @@ def gate_map(
     measure_retrace: Optional[bool] = False,
 ):
 
-    init_smu(station)
-    # NOTE: this does not take into account any change in the compliance limit.
-    # limits that were previously set up will be overwritten at that point.
-    # TODO: make the function useable with different kinds of keithleys
+    # The SMUs are expected to be set up already: their mode, compliance limits and ranges come from the
+    # presets of the station file (see docs/station_templates.yaml).
 
     lockins = []
     for name, itm in station.components.items():

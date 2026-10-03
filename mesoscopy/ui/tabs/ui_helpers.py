@@ -1,10 +1,20 @@
 """Shared UI helper functions for tabs."""
 from PyQt6.QtWidgets import QGroupBox, QHBoxLayout, QLabel
+from PyQt6.QtCore import Qt
 
 
 def set_groupbox_title_bold(group_box: QGroupBox) -> None:
     """Make only the GroupBox title bold using a stylesheet."""
     group_box.setStyleSheet("QGroupBox::title { font-weight: bold; }")
+
+
+def make_text_selectable(label: QLabel) -> QLabel:
+    """Allow text in a label to be selected without making it editable."""
+    label.setTextInteractionFlags(
+        Qt.TextInteractionFlag.TextSelectableByMouse
+        | Qt.TextInteractionFlag.TextSelectableByKeyboard
+    )
+    return label
 
 
 def add_labeled_row(parent_layout, label_text, widget, *, stretch=True) -> QHBoxLayout:

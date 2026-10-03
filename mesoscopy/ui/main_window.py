@@ -1,299 +1,279 @@
-"""Main window UI component."""
-import sys
-from PyQt6.QtWidgets import (
-    QMainWindow, QWidget, QVBoxLayout, QTabWidget, QStatusBar
-)
-from PyQt6.QtCore import QThreadPool
+"""The main window: the composition root of the application.
 
-from mesoscopy.core.constants import DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT, CONTENT_MARGINS
+It builds the services (``mesoscopy.services``), the tabs and the snapshot loader, and connects them: tabs and
+services talk through signals, never through each other or through this window. What remains here is what only a
+window can do: the menu bar, the status bar, the tabs' frame, remembering the layout and closing.
+"""
+from PyQt6.QtCore import QByteArray, QTimer, Qt, pyqtSignal
+from PyQt6.QtGui import QAction, QKeySequence
+from PyQt6.QtWidgets import QLabel, QMainWindow, QMessageBox, QStatusBar, QTabWidget, QVBoxLayout, QWidget
+
+from mesoscopy.core.constants import CONTENT_MARGINS
+from mesoscopy.core.qcodes_options import apply_overrides
+from mesoscopy.services import create_services
+from mesoscopy.services.run_queue import QueueHooks
+from mesoscopy.ui.session import SessionFields
+from mesoscopy.ui.settings_dialog import SettingsDialog
+from mesoscopy.ui.snapshot_loader import LoaderHooks, SnapshotLoader
+from mesoscopy.ui.tabs.data_tab import DataTab
 from mesoscopy.ui.tabs.instruments_tab import InstrumentsTab
-from mesoscopy.ui.tabs.measurement_tab import MeasurementTab
-from mesoscopy.ui.tabs.experiment_1d_tab import Experiment1DTab
-from mesoscopy.ui.tabs.experiment_2d_tab import Experiment2DTab
-from mesoscopy.ui.tabs.parameters_tab import ParametersTab
-from mesoscopy.ui.dialogs import FileDialogs
-from mesoscopy.ui.station_manager import StationManager
-from mesoscopy.experiment.manager import ExperimentManager
+from mesoscopy.ui.tabs.monitor_tab import MonitorTab
+from mesoscopy.ui.tabs.parameter_explorer_tab import ParameterExplorerTab
+from mesoscopy.ui.tabs.queue_tab import QueueTab
+from mesoscopy.ui.tabs.sparklines import StatusSparklines
+from mesoscopy.ui.tabs.sweep_tab import SweepTab
+
+
+ALARM_SHOWN_MS = 15000  # how long an alarm stays in the status bar
+
+
+class AlarmLabel(QLabel):
+    """The alarm in the status bar: red, hidden after a while, and a click goes to the Monitor tab."""
+
+    clicked = pyqtSignal()
+
+    def __init__(self):
+        super().__init__("")
+        self.setStyleSheet("color: white; background: #c62828; font-weight: bold; padding: 1px 8px; border-radius: 3px;")
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setVisible(False)
+        self._timer = QTimer(self)
+        self._timer.setSingleShot(True)
+        self._timer.timeout.connect(self.hide)
+
+    def show_alarm(self, text, tooltip):
+        self.setText("\u26A0 " + text)
+        self.setToolTip(tooltip + "\nClick to open the Monitor tab.")
+        self.setVisible(True)
+        self._timer.start(ALARM_SHOWN_MS)
+
+    def mousePressEvent(self, event):
+        self.clicked.emit()
+        super().mousePressEvent(event)
 
 
 class MainWindow(QMainWindow):
     """Main application window."""
 
-    def __init__(self):
+    def __init__(self, settings=None):
         super().__init__()
         self.setWindowTitle("mesoscoPy - Experiment Runner")
         self.setStatusBar(QStatusBar(self))
 
-        self.station = None
-        self.threadpool = QThreadPool()
-        print("Multithreading with maximum %d threads" % self.threadpool.maxThreadCount())
+        # the services every tab works with: settings, instrument gateway, station, experiment parameters, data
+        # location, run controller
+        self.services = services = create_services(settings, parent=self)
+        services.status.message.connect(lambda text, timeout: self.statusBar().showMessage(text, timeout))
+        # the experiment parameters follow the instruments (connected before the tabs, which subscribe to the result)
+        services.station.instrumentsChanged.connect(services.registry.sync)
+
+        # what the user is waiting for, when instruments are in use
+        self.busy_label = QLabel("")
+        self.statusBar().addPermanentWidget(self.busy_label)
+        # an alarm on a parameter: shown for a while in the status bar; a click opens the Monitor tab
+        self.alarm_label = AlarmLabel()
+        self.statusBar().addPermanentWidget(self.alarm_label)
+        services.alarms.alarmRaised.connect(self._show_alarm)
+        self.alarm_label.clicked.connect(self._open_monitor)
+        services.gateway.changed.connect(self._show_gateway_state)
 
         self.tabs = QTabWidget()
-
         self.instruments_tab_widget = QWidget()
-        self.measurement_tab_widget = QWidget()
-        self.experiment_1d_widget = QWidget()
-        self.experiment_2d_widget = QWidget()
-        self.sweep_nD_tab = QWidget()
-        self.parameters_tab = QWidget()
-
+        self.data_tab_widget = QWidget()
+        self.sweep_tab_widget = QWidget()
+        self.parameter_explorer_widget = QWidget()
+        self.queue_widget = QWidget()
+        self.monitor_widget = QWidget()
+        self.tabs.addTab(self.data_tab_widget, "Data")
         self.tabs.addTab(self.instruments_tab_widget, "Instruments")
-        self.tabs.addTab(self.measurement_tab_widget, "Measurement")
-        self.tabs.addTab(self.experiment_1d_widget, "Sweep 1D")
-        self.tabs.addTab(self.experiment_2d_widget, "Sweep 2D")
-        self.tabs.addTab(self.sweep_nD_tab, "Sweep nD")
-        self.tabs.addTab(self.parameters_tab, "Parameters")
+        self.tabs.addTab(self.parameter_explorer_widget, "Parameter explorer")
+        self.tabs.addTab(self.sweep_tab_widget, "Measurement")
+        self.tabs.addTab(self.queue_widget, "Queue")
+        self.tabs.addTab(self.monitor_widget, "Monitor")
 
-        # Create wrapper widget with margins
-        wrapper = QWidget()
+        wrapper = QWidget()  # the tabs with a margin around
         wrapper_layout = QVBoxLayout()
         wrapper_layout.setContentsMargins(CONTENT_MARGINS, CONTENT_MARGINS, CONTENT_MARGINS, CONTENT_MARGINS)
         wrapper_layout.addWidget(self.tabs)
         wrapper.setLayout(wrapper_layout)
-
         self.setCentralWidget(wrapper)
 
-        # Initialize managers and dialogs
-        self.file_dialogs = FileDialogs(self)
-        self.station_manager = StationManager(self)
-        self.experiment_manager = ExperimentManager(self)
+        # the tabs: each owns its widgets and gets the services, nothing else
+        self.instruments_tab = InstrumentsTab(self.instruments_tab_widget, services)
+        self.data_tab = DataTab(self.data_tab_widget, services)
+        self.sweep_tab = SweepTab(self.sweep_tab_widget, services)
+        self.parameter_explorer_tab = ParameterExplorerTab(self.parameter_explorer_widget, services)
+        self.queue_tab = QueueTab(self.queue_widget, services)
+        self.monitor_tab = MonitorTab(self.monitor_widget, services)
+        # the queue takes recipes into the Measurement tab and runs what it builds; editing shows that tab
+        services.queue.hooks = QueueHooks(apply_state=self.sweep_tab.set_state, build_request=self.sweep_tab.build_request)
+        services.queue.editRequested.connect(lambda _item: self.tabs.setCurrentWidget(self.sweep_tab_widget))
 
-        # Initialize tabs
-        self.instruments_tab = InstrumentsTab(self.instruments_tab_widget, self)
-        self.measurement_tab = MeasurementTab(self.measurement_tab_widget, self)
-        self.experiment_1d_tab = Experiment1DTab(self.experiment_1d_widget, self)
-        self.experiment_2d_tab = Experiment2DTab(self.experiment_2d_widget, self)
-        self.parameters_tab = ParametersTab(self.parameters_tab, self)
+        # the monitored parameters whose trace is ticked, as sparklines in the status bar
+        self.sparklines = StatusSparklines(services.settings, self.monitor_tab.sparkline_series)
+        self.statusBar().addPermanentWidget(self.sparklines)
+        self.monitor_tab.traces_updated.connect(self.sparklines.refresh)
 
-        # Update parameter forms after tab creation
-        self.experiment_1d_tab.update_parameters_form()
-        self.experiment_2d_tab.update_parameters_form()
+        # Load Snapshot sets several tabs up: it is given what it needs, and is started by signals of the tabs
+        self.snapshot_loader = SnapshotLoader(services, LoaderHooks(
+            parent=self, instrument_manager=self.instruments_tab.manager,
+            apply_sweep_state=self.sweep_tab.set_state,
+            show_measurement_tab=lambda: self.tabs.setCurrentWidget(self.sweep_tab_widget),
+        ))
+        self.data_tab.loadSnapshotRequested.connect(self.snapshot_loader.load)
+        self.instruments_tab.saveStateRequested.connect(self.snapshot_loader.save_instrument_state)
+        self.instruments_tab.restoreFromFileRequested.connect(self.snapshot_loader.restore_instrument_from_file)
+        self.instruments_tab.restoreFromRunRequested.connect(self.snapshot_loader.restore_instrument_from_run)
 
-    # Folder selection methods
-    def select_db_folder(self):
-        """Select database folder."""
-        self.file_dialogs.select_db_folder()
+        self._build_menus()
+        self._register_session_fields()
+        # the tabs open up as the application is set up: a database, a station, experiment parameters, a monitor
+        self._starting = True
+        for signal in (services.data.entryChanged, services.station.stationChanged, services.station.instrumentsChanged,
+                       services.station.monitoredChanged, services.registry.parametersChanged, services.alarms.changed):
+            signal.connect(self.update_tab_access)
+        self.update_tab_access()
+        self._apply_startup_settings()
+        self._starting = False
+        self.update_tab_access()
+        QTimer.singleShot(0, self._offer_queue_recovery)  # once the window is up
 
-    def select_station_folder(self):
-        """Select station folder."""
-        self.file_dialogs.select_station_folder()
-    
-    def select_logs_folder(self):
-        """Select logs folder."""
-        self.file_dialogs.select_logs_folder()
+    # ================= which tabs can be used =================
+    def tab_requirements(self):
+        """[(tab widget, what is needed first, whether it is there)] in tab order. Every tab but Data needs a
+        database; each of the others needs what comes before it in the set-up."""
+        services = self.services
+        registry = services.registry
+        database = services.data.has_database
+        instruments = database and bool(services.station.instruments())
+        # the station-level parameters (elapsed time) are always there: they do not count
+        parameters = instruments and any(registry.definitions[name].kind != "root" for name in registry.parameters())
+        monitored = instruments and (bool(services.station.monitored()) or bool(services.alarms.parameters()))
+        after_database = "Enter a database in the Data tab first."
+        after_instrument = "Connect an instrument in the Instruments tab first." if database else after_database
+        after_parameters = "Define experiment parameters in the Parameter explorer first." if instruments else after_instrument
+        after_monitor = ("Monitor a parameter, or put an alarm on one, from the Parameter explorer first."
+                         if instruments else after_instrument)
+        return [
+            (self.data_tab_widget, "", True),
+            (self.instruments_tab_widget, after_database, database),
+            (self.parameter_explorer_widget, after_instrument, instruments),
+            (self.sweep_tab_widget, after_parameters, parameters),
+            (self.queue_widget, after_parameters, parameters),
+            (self.monitor_widget, after_monitor, monitored),
+        ]
 
-    # Station management methods
-    def populate_station_files(self):
-        """Populate the station file dropdown with .station.yaml files from the selected folder."""
-        self.station_manager.populate_station_files()
+    def update_tab_access(self):
+        """Grey out the tabs whose set-up step is not done yet (their tooltip says what is missing), and leave a tab
+        that is no longer available."""
+        enabled = []
+        for widget, missing, available in self.tab_requirements():
+            index = self.tabs.indexOf(widget)
+            self.tabs.setTabEnabled(index, available)
+            self.tabs.setTabToolTip(index, "" if available else missing)
+            enabled.append(available)
+        current = self.tabs.currentIndex()
+        if not self._starting and not enabled[current]:  # at start the saved tab is kept until everything is loaded
+            self.tabs.setCurrentIndex(max(i for i in range(current) if enabled[i]))
 
-    def load_station(self):
-        """Load station from YAML configuration file."""
-        self.station_manager.load_station()
+    # ================= menus, settings and session =================
+    def _build_menus(self):
+        """The menu bar: in the window on Windows and Linux, in the system menu bar on macOS, where the Settings
+        entry is moved to the application menu (Preferences) by Qt."""
+        file_menu = self.menuBar().addMenu("&File")
+        settings_action = QAction("Settings...", self)
+        settings_action.setShortcut(QKeySequence(QKeySequence.StandardKey.Preferences))
+        settings_action.setMenuRole(QAction.MenuRole.PreferencesRole)
+        settings_action.triggered.connect(self.open_settings)
+        file_menu.addAction(settings_action)
+        quit_action = QAction("Quit", self)
+        quit_action.setShortcut(QKeySequence(QKeySequence.StandardKey.Quit))
+        quit_action.setMenuRole(QAction.MenuRole.QuitRole)
+        quit_action.triggered.connect(self.close)
+        file_menu.addAction(quit_action)
+        self.settings_action = settings_action
 
-    def populate_instrument_list(self, config_file=None):
-        """Populate instrument list from station or YAML config file."""
-        self.station_manager.populate_instrument_list(config_file)
+    def open_settings(self):
+        """Open the Settings window."""
+        SettingsDialog(self, self.services.settings, self.save_session).exec()
 
-    def load_selected_instruments(self):
-        """Load selected instruments from station."""
-        self.station_manager.load_selected_instruments()
+    def _register_session_fields(self):
+        """The window layout and the fields whose entries are remembered: each tab registers its own. The order is
+        the order of restoring: a folder before the files it lists."""
+        fields = self.session_fields = SessionFields()
+        fields.register(
+            "window/geometry", lambda: bytes(self.saveGeometry().toBase64()).decode(),
+            lambda value: self.restoreGeometry(QByteArray.fromBase64(value.encode())),
+        )
+        for tab in (self.instruments_tab, self.data_tab, self.sweep_tab, self.queue_tab, self.monitor_tab):
+            tab.register_session_fields(fields)
+        fields.register("alarms/parameters", self.services.alarms.names, self.services.alarms.restore_names)
+        fields.register("window/tab", self.tabs.currentIndex, self.tabs.setCurrentIndex)
 
-    def start_logging(self):
-        """Start qcodes command history and logger using the logs folder."""
-        log_path = self.logs_folder_display.text().strip()
-        err_label = getattr(self, "logs_error_display", None)
-        if not log_path:
-            if err_label:
-                err_label.setText("Select a logs folder first.")
+    def save_session(self):
+        """Remember the window layout and the field entries for the next session."""
+        self.services.settings.save_session(self.session_fields.capture())
+
+    def _apply_startup_settings(self):
+        """At start: QCoDeS values chosen by the user, default folders, the previous session, the last station."""
+        settings = self.services.settings
+        apply_overrides(settings.qcodes_overrides())
+        self.instruments_tab.apply_default_folders()
+        self.data_tab.apply_default_folders()
+        if settings.restore_session:
+            self.session_fields.restore(settings.session())
+        if settings.load_last_station:
+            self.instruments_tab.load_last_station()
+
+    def _offer_queue_recovery(self):
+        """The last session ended while the queue was running (a crash, a power cut): offer to put the queue back."""
+        queue = self.services.queue
+        summary = queue.interrupted_summary()
+        if summary is None:
             return
-        if not __import__("os").path.isdir(log_path):
-            if err_label:
-                err_label.setText("Logs path is not a directory.")
-            return
-        try:
-            from qcodes.logger import start_command_history_logger, start_logger
-            start_command_history_logger(log_path)
-            start_logger()
-            if err_label:
-                err_label.setText("")
-            self.statusBar().showMessage("Logging started.", 2000)
-        except Exception as e:
-            if err_label:
-                err_label.setText(str(e))
-            self.statusBar().showMessage(f"Logging error: {e}", 3000)
+        done, total, title = summary
+        box = QMessageBox(self)
+        box.setIcon(QMessageBox.Icon.Warning)
+        box.setWindowTitle("Interrupted queue")
+        box.setText(f"The last session ended while the queue was running: {done} of {total} items were finished"
+                    + (f" and '{title}' was in progress." if title else "."))
+        box.setInformativeText(
+            "Restore the queue? Nothing starts by itself: load the station and the instruments, check them, then press "
+            "Start in the Queue tab. The data the interrupted item had written stays in the database.")
+        again = box.addButton("Restore, run the interrupted item again", QMessageBox.ButtonRole.AcceptRole)
+        skip = box.addButton("Restore, without the interrupted item", QMessageBox.ButtonRole.AcceptRole)
+        box.addButton("Discard", QMessageBox.ButtonRole.RejectRole)
+        box.exec()
+        clicked = box.clickedButton()
+        if clicked in (again, skip):
+            queue.restore_after_crash(rerun_interrupted=clicked is again)
+            self.tabs.setCurrentWidget(self.queue_widget) if self.tabs.isTabEnabled(self.tabs.indexOf(self.queue_widget)) else None
+        else:
+            queue.crash_data = None
 
-    def configure_lockins(self):
-        """Apply lock-in configuration from the UI using configure_MFLI_osc_master, configure_sr_lockin, configure_MFLI."""
-        err_label = getattr(self, "lockins_error_display", None)
-        if not self.station:
-            if err_label:
-                err_label.setText("Load a station and instruments first.")
-            return
-        lockin_names = getattr(self, "lockin_name_fields", None) or []
-        if not lockin_names:
-            if err_label:
-                err_label.setText("No lock-ins in configuration.")
-            return
-        try:
-            from mesoscopy.instrument.lockin import (
-                configure_MFLI_osc_master,
-                configure_sr_lockin,
-                configure_MFLI,
-            )
-            errors = []
-            default_freq = 377.778
-            default_tc = 0.03
-            default_order = 4
-            default_filter_slope = 24  # dB/oct for order 4
-            master_done = False
-            for idx, name_field in enumerate(lockin_names):
-                name = name_field.text().strip()
-                if not name or name not in self.station.components:
-                    continue
-                lockin = self.station.components[name]
-                class_name = lockin.__class__.__name__
-                role = "master"
-                if getattr(self, "lockin_role_combos", None) and idx < len(self.lockin_role_combos):
-                    role = self.lockin_role_combos[idx].currentText()
-                is_mfli = "MFLI" in class_name or "HF2LI" in class_name
-                is_sr = "SR830" in class_name or "SR860" in class_name or "SR865" in class_name
-                try:
-                    if is_mfli:
-                        if role == "master":
-                            configure_MFLI_osc_master(lockin, osc_idx=0, frequency=default_freq)
-                            master_done = True
-                        configure_MFLI(
-                            lockin,
-                            demod_idx=0,
-                            time_constant=default_tc,
-                            order=default_order,
-                            V_drive=None,
-                            adcselect=0 if role != "master" else None,
-                        )
-                    elif is_sr:
-                        configure_sr_lockin(
-                            lockin,
-                            time_constant=default_tc,
-                            filter_slope=default_filter_slope,
-                        )
-                except Exception as e:
-                    errors.append(f"{name}: {e}")
-            if errors:
-                if err_label:
-                    err_label.setText("\n".join(errors))
-            else:
-                if err_label:
-                    err_label.setText("")
-                self.statusBar().showMessage("Lock-ins configured.", 2000)
-        except Exception as e:
-            if err_label:
-                err_label.setText(str(e))
-            self.statusBar().showMessage(f"Configure lock-ins error: {e}", 3000)
+    # ================= the window itself =================
+    def _show_alarm(self, record):
+        self.alarm_label.show_alarm(record["text"].replace("ALARM ", "", 1), record["text"])
 
-    def configure_smu(self):
-        """Apply SMU configuration from the UI using configure_smu_2614B_gate."""
-        err_label = getattr(self, "smu_error_display", None)
-        if not self.station:
-            if err_label:
-                err_label.setText("Load a station and instruments first.")
-            return
-        smu_inputs = getattr(self, "smu_inputs", None) or []
-        if not smu_inputs:
-            if err_label:
-                err_label.setText("No SMU channels in configuration.")
-            return
-        current_range_map = {
-            "100nA": 1e-7, "1µA": 1e-6, "10µA": 1e-5, "100µA": 1e-4,
-            "1mA": 1e-3, "10mA": 1e-2, "100mA": 0.1, "1A": 1.0,
-        }
-        voltage_range_map = {
-            "20mV": 0.02, "200mV": 0.2, "2V": 2.0, "20V": 20.0, "200V": 200.0,
-        }
-        try:
-            from mesoscopy.instrument.smu import configure_smu_2614B_gate
-            errors = []
-            for idx in range(len(smu_inputs)):
-                display_name = self.smu_inputs[idx].text().strip()
-                if "." in display_name:
-                    inst_name, ch = display_name.split(".", 1)
-                    ch = ch.strip().lower()
-                else:
-                    inst_name = display_name
-                    ch = None
-                if inst_name not in self.station.components:
-                    errors.append(f"{display_name}: instrument not in station")
-                    continue
-                inst = self.station.components[inst_name]
-                if ch in ("smua", "smub"):
-                    smu_ch = getattr(inst, ch, None)
-                else:
-                    smu_ch = inst
-                if smu_ch is None:
-                    errors.append(f"{display_name}: channel not found")
-                    continue
-                mode = self.smu_mode_inputs[idx].currentText()
-                limiti = self.smu_limit_current_inputs[idx].value()
-                limitv = self.smu_limit_voltage_inputs[idx].value()
-                cr_text = self.smu_current_range_inputs[idx].currentText()
-                vr_text = self.smu_voltage_range_inputs[idx].currentText()
-                measurerange_i = current_range_map.get(cr_text, 1e-7)
-                measurerange_v = voltage_range_map.get(vr_text, 20.0)
-                nplc = self.smu_nplc_inputs[idx].value()
-                output = self.smu_outputs_enabled_inputs[idx].isChecked()
-                try:
-                    configure_smu_2614B_gate(
-                        smu_ch,
-                        mode=mode,
-                        limiti=limiti,
-                        limitv=limitv,
-                        measurerange_i=measurerange_i,
-                        measurerange_v=measurerange_v,
-                        sourcerange_v=measurerange_v,
-                        nplc=nplc,
-                        output=output,
-                    )
-                except Exception as e:
-                    errors.append(f"{display_name}: {e}")
-            if errors:
-                if err_label:
-                    err_label.setText("\n".join(errors))
-            else:
-                if err_label:
-                    err_label.setText("")
-                self.statusBar().showMessage("SMU configured.", 2000)
-        except Exception as e:
-            if err_label:
-                err_label.setText(str(e))
-            self.statusBar().showMessage(f"Configure SMU error: {e}", 3000)
+    def _open_monitor(self):
+        """A click on the alarm in the status bar: the Monitor tab, where the alarms of the session are listed."""
+        if self.tabs.isTabEnabled(self.tabs.indexOf(self.monitor_widget)):
+            self.tabs.setCurrentWidget(self.monitor_widget)
 
-    def populate_db_files(self):
-        """Populate the database file dropdown with .db files from the selected folder."""
-        folder = self.db_folder_display.text()
-        if not folder or not __import__('os').path.isdir(folder):
-            return
-        
-        self.db_file_combo.blockSignals(True)
-        self.db_file_combo.clear()
-        
-        # Find all .db files in the folder
-        import os
-        db_files = [f for f in os.listdir(folder) if f.endswith('.db')]
-        db_files.sort()
-        
-        if db_files:
-            self.db_file_combo.addItems(db_files)
-        
-        # Add "New database" option at the end
-        self.db_file_combo.addItem("New database")
-        self.db_file_combo.blockSignals(False)
+    def _show_gateway_state(self):
+        """Show in the status bar the measurement or user action that has the instruments."""
+        labels = self.services.gateway.labels()
+        self.busy_label.setText("Instruments in use: " + "; ".join(labels) if labels else "")
 
-    # Experiment execution methods
-    def run_experiment(self):
-        """Run 1D experiment (Test Gates)."""
-        self.experiment_manager.run_experiment_1d()
-
-    def run_experiment_2d(self):
-        """Run 2D experiment (Gate-Gate Mapping)."""
-        self.experiment_manager.run_experiment_2d()
-
+    def closeEvent(self, event):
+        """Remember the layout, stop a running measurement, then disconnect all loaded instruments."""
+        self.save_session()
+        self.services.queue.stop()  # no next item after the one in progress
+        self.services.run.stop()  # also wakes a paused run
+        self.sweep_tab.shutdown()
+        self.monitor_tab.shutdown()
+        self.parameter_explorer_tab.shutdown()
+        self.services.gateway.shutdown()  # let the measurement and the other jobs end before the instruments are closed
+        self.instruments_tab.shutdown()  # the experiment parameters the application changed go to 0 first
+        self.services.queue.mark_clean()  # a clean end: the next start finds no interrupted queue
+        super().closeEvent(event)

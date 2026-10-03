@@ -1,7 +1,8 @@
 import logging
-from qcodes import IPInstrument, VisaInstrument, Parameter
-from qcodes.utils.validators import Ints, Enum, Numbers, Sequence, Numbers, Bool
-import qcodes.utils.validators as vals
+from qcodes.instrument import IPInstrument, VisaInstrument
+from qcodes.parameters import Parameter
+from qcodes.validators import Ints, Enum, Numbers, Sequence, Numbers, Bool
+import qcodes.validators as vals
 from qcodes.parameters import create_on_off_val_mapping
 from typing import Optional, Any, Dict
 import pyvisa

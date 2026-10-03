@@ -1,10 +1,10 @@
 import time as _time_module
 from time import time
-from qcodes import Parameter
+from qcodes.parameters import Parameter
 import numpy as np
 from typing import Tuple
-from qcodes import Instrument
-from qcodes.utils.validators import Ints, Numbers
+from qcodes.instrument import Instrument
+from qcodes.validators import Ints, Numbers
 from qcodes.parameters import ParameterBase, ElapsedTimeParameter as TimeParameter
 from scipy.constants import e, epsilon_0
 

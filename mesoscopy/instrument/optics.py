@@ -4,8 +4,9 @@ import os
 import ctypes
 from typing import Optional, Tuple, Any, Sequence
 
-from qcodes import Instrument, Parameter, VisaInstrument
-from qcodes.utils.validators import Ints
+from qcodes.instrument import Instrument, VisaInstrument
+from qcodes.parameters import Parameter
+from qcodes.validators import Ints
 
 log = logging.getLogger(__name__)
 
