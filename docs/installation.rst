@@ -26,7 +26,7 @@ or clone the repository (it can be less stable than a release):
 
 .. code:: bash
 
-   git clone https://github.com/julienbarrier/mesoscopy.git
+   git clone https://github.com/mpilde/mesoscopy.git
    cd mesoscopy
 
 3. Create the environment
