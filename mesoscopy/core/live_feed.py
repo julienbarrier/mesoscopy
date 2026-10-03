@@ -93,8 +93,10 @@ class LiveRun:
         axes = {n for columns in tree.values() for n in columns[1:] if n in self._plotted}
         self.uses_cache = (not self._has_arrays and len(axes) >= 2
                            and bool(getattr(dataset, "_in_memory_cache", False)))
-        if not self.uses_cache:
-            self._buffers = {n: _Buffer(complex if specs[n].type == "complex" else float) for n in self._names}
+        # The buffers: one set per kind of row. A run measures parameters that depend on different setpoints (scalars of the
+        # sweep next to a trace with its own axis), and QCoDeS writes a row for each kind: they must not be mixed.
+        self._groups = {}        # tops present in a row -> {column: _Buffer}
+        self._group_trace = {}   # tops present in a row -> points of its traces (when it has any)
         self._trace_length = None
         self.run_id = dataset.run_id
         self._captured_run_id, self._name = dataset.captured_run_id, dataset.name
@@ -123,16 +125,37 @@ class LiveRun:
             if name in self._plotted:
                 is_array = self._specs[name].type == "array"
                 values[name] = _convert_array(value) if is_array and isinstance(value, (bytes, bytearray)) else value
-        if self._has_arrays:  # a trace: one row per acquisition, the scalars are repeated along it (as QCoDeS does)
-            length = max((np.size(v) for n, v in values.items() if self._specs[n].type == "array"), default=1)
-            self._trace_length = self._trace_length or length
-            for name, buffer in self._buffers.items():
+        present = tuple(top for top in self._tree if values.get(top) is not None)  # which dependents this row carries
+        if not present:
+            return
+        columns = list(dict.fromkeys(n for top in present for n in self._tree[top] if n in self._plotted))
+        group = self._groups.get(present)
+        if group is None:
+            group = self._groups[present] = {n: _Buffer(complex if self._specs[n].type == "complex" else float)
+                                             for n in columns}
+        arrays = [n for n in columns if self._specs[n].type == "array"]
+        if arrays:  # a trace: one row per acquisition, the scalars are repeated along it (as QCoDeS does)
+            length = max(np.size(values[n]) for n in arrays)
+            self._group_trace.setdefault(present, length)
+            for name, buffer in group.items():
                 value = values.get(name)
                 buffer.extend(value if self._specs[name].type == "array" else np.full(length, _number(value)))
         else:
-            for name, buffer in self._buffers.items():
+            for name, buffer in group.items():
                 buffer.extend([_number(values.get(name))])
         self._rows += 1
+
+    def _collect(self):
+        """The columns of the buffers by name. A column that several kinds of rows carry (the sweep's own axis is in the rows
+        of the scalars and in those of the trace) comes from the first dependent that has it, like ``fetch_run_data``."""
+        arrays, order = {}, list(self._tree)
+        for signature in sorted(self._groups, key=lambda sig: min(order.index(t) for t in sig)):
+            for name, buffer in self._groups[signature].items():
+                if name not in arrays:
+                    arrays[name] = buffer.view()
+            if signature in self._group_trace and self._trace_length is None:
+                self._trace_length = self._group_trace[signature]
+        return {n: arrays[n] for n in self._names if n in arrays}
 
     def finish(self):
         """The dataset is complete: the last rows were delivered when the subscribers were removed."""
@@ -161,7 +184,7 @@ class LiveRun:
                 rows, version, completed = self._rows, self.version, self.completed
                 if rows == 0:
                     return None
-                arrays = (self._frozen or self._cache_arrays(rows)) if self.uses_cache else {n: b.view() for n, b in self._buffers.items()}
+                arrays = (self._frozen or self._cache_arrays(rows)) if self.uses_cache else self._collect()
             if not arrays:
                 return None
         except Exception:
