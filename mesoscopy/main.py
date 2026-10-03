@@ -6,6 +6,8 @@ Main entry point for the application.
 import sys
 from PyQt6.QtWidgets import QApplication
 
+import mesoscopy
+
 from mesoscopy.ui.error_handling import install_exception_hook
 from mesoscopy.ui.main_window import MainWindow
 from mesoscopy.core.constants import DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT
@@ -14,6 +16,8 @@ from mesoscopy.core.constants import DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT
 def main():
     """Launch the application."""
     app = QApplication(sys.argv)
+    app.setApplicationName("mesoscoPy")  # the name the system shows (the application menu on macOS)
+    app.setApplicationVersion(mesoscopy.__version__)
     app.setStyle("Universal")
     
     window = MainWindow()

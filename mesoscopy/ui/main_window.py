@@ -12,6 +12,7 @@ from mesoscopy.core.constants import CONTENT_MARGINS
 from mesoscopy.core.qcodes_options import apply_overrides
 from mesoscopy.services import create_services
 from mesoscopy.services.run_queue import QueueHooks
+from mesoscopy.ui.about_dialog import AboutDialog
 from mesoscopy.ui.session import SessionFields
 from mesoscopy.ui.settings_dialog import SettingsDialog
 from mesoscopy.ui.snapshot_loader import LoaderHooks, SnapshotLoader
@@ -192,10 +193,20 @@ class MainWindow(QMainWindow):
         quit_action.triggered.connect(self.close)
         file_menu.addAction(quit_action)
         self.settings_action = settings_action
+        # About: the system decides where it lives (the application menu on macOS, the Help menu elsewhere)
+        about_action = QAction("About mesoscoPy", self)
+        about_action.setMenuRole(QAction.MenuRole.AboutRole)
+        about_action.triggered.connect(self.open_about)
+        self.menuBar().addMenu("&Help").addAction(about_action)
+        self.about_action = about_action
 
     def open_settings(self):
         """Open the Settings window."""
         SettingsDialog(self, self.services.settings, self.save_session).exec()
+
+    def open_about(self):
+        """Open the About window."""
+        AboutDialog(self, self.services.settings.file_name()).exec()
 
     def _register_session_fields(self):
         """The window layout and the fields whose entries are remembered: each tab registers its own. The order is
