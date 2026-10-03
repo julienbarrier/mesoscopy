@@ -2,6 +2,7 @@
 from collections import deque
 from datetime import datetime
 import math
+import os
 import time
 
 from PyQt6.QtCore import QObject, QPointF, QRect, QTimer, Qt, pyqtSignal
@@ -11,11 +12,15 @@ from PyQt6.QtWidgets import (
     QPushButton, QScrollArea, QSpinBox, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget,
 )
 
+import qcodes.logger.logger as qcodes_logger
+
+from mesoscopy.core.monitor_log import MonitorLog
 from mesoscopy.core.gateway import BACKGROUND, USER, parameter_instruments
 from mesoscopy.services.alarms import ACTION_TEXT
 from mesoscopy.core.parameter_io import parameter_label, read_for_monitor
 from mesoscopy.core.plot_math import decimate, nice_step
 
+LOG_WAIT_S = 60  # a parameter that has not been read this long after the log started is logged empty
 MIN_PERIOD_S, MAX_PERIOD_S, DEFAULT_PERIOD_S = 1, 3600, 5
 MIN_WINDOW_MIN, MAX_WINDOW_MIN, DEFAULT_WINDOW_MIN = 1, 1440, 10  # duration shown by the time traces
 MAX_WINDOW_S = MAX_WINDOW_MIN * 60  # history is kept for the longest duration, so the scale can be widened later
@@ -186,6 +191,10 @@ class MonitorTab(QObject):
         self._last_text = {}    # id(parameter) -> last displayed reading
         self._last_time = {}    # id(parameter) -> time of that reading
         self._window_s = DEFAULT_WINDOW_MIN * 60
+        self._log = MonitorLog()   # the Monitor's log on disk (core/monitor_log.py)
+        self._latest = {}          # id(parameter) -> (last value, epoch seconds of that reading), what the log writes
+        self._log_started = 0.0    # when the current log file was started
+        self._log_last = 0.0       # when the last row was written (0: none yet)
         self._polling = False
         self._poll_left, self._poll_results = 0, []
         self._timer = QTimer()
@@ -202,6 +211,10 @@ class MonitorTab(QObject):
         services.station.instrumentsChanged.connect(self.sync)
         services.registry.parametersChanged.connect(self.sync)
         services.run.monitorReadings.connect(self._on_run_readings)
+        # the log starts a new file when the database, the log folder or the monitored parameters change
+        services.data.locationChanged.connect(self._update_log_target)
+        services.data.logsFolderChanged.connect(self._update_log_target)
+        services.ticker.tick.connect(self._log_tick)
         services.alarms.changed.connect(self._refresh_alarms)
         services.alarms.historyChanged.connect(self._refresh_alarms)
         self._refresh_alarms()
@@ -229,6 +242,14 @@ class MonitorTab(QObject):
         self.refresh_button.clicked.connect(lambda: self.poll())
         self.services.measuring.gate(self.refresh_button)  # the instruments are not read in parallel with a run
         controls.addWidget(self.refresh_button)
+        self.log_checkbox = QCheckBox("Log to file")
+        self.log_checkbox.setChecked(True)
+        self.log_checkbox.setToolTip(
+            "Write the monitored values to a file in the QCoDeS log folder (Data tab): monitor_<database>_<date>.log, one "
+            "column per parameter, one row per duration of the time traces (10 min by default). A new file starts when the "
+            "database or the list of monitored parameters changes.")
+        self.log_checkbox.toggled.connect(self._update_log_target)
+        controls.addWidget(self.log_checkbox)
         controls.addStretch()
         layout.addLayout(controls)
 
@@ -283,6 +304,11 @@ class MonitorTab(QObject):
         self.status_label = QLabel("")
         self.status_label.setWordWrap(True)
         layout.addWidget(self.status_label)
+        self.log_label = QLabel("")
+        self.log_label.setStyleSheet("color: gray; font-size: 0.9em;")
+        self.log_label.setWordWrap(True)
+        self.log_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        layout.addWidget(self.log_label)
         self._update_status()
 
     # ----- the alarms of the session -----
@@ -399,6 +425,7 @@ class MonitorTab(QObject):
         self.table.blockSignals(False)
         self._refresh_traces()
         self._update_status()
+        self._update_log_target()
 
     def _update_status(self, text=None):
         if text is not None:
@@ -441,6 +468,7 @@ class MonitorTab(QObject):
 
     def _on_window_changed(self, minutes):
         self._window_s = minutes * 60
+        self._show_log_state()
         hours, rest = divmod(minutes, 60)
         self.window_label.setText(f"= {hours} h" + (f" {rest} min" if rest else "") if minutes > 60 else "")
         self._redraw_traces()
@@ -551,6 +579,7 @@ class MonitorTab(QObject):
             self._units[key] = reading["unit"]
             self._last_text[key] = reading["text"] + unit
             self._last_time[key] = datetime.fromtimestamp(reading["ts"]).strftime("%H:%M:%S")
+            self._latest[key] = (reading["numeric"] if reading["numeric"] is not None else reading["text"], reading["ts"])
             row["value"].setText(self._last_text[key])
             row["value"].setToolTip(self._last_text[key])
             row["time"].setText(self._last_time[key])
@@ -579,6 +608,65 @@ class MonitorTab(QObject):
             self._update_status(f"{len(results)} parameters read at {datetime.now():%H:%M:%S}"
                                 + (" by the measurement." if during_run else "."))
 
+    # ----- the log on disk -----
+    def _log_database(self):
+        selected = self.services.data.selected_file
+        return os.path.splitext(os.path.basename(selected))[0] if selected else "nodb"
+
+    def _log_folder(self):
+        """The QCoDeS log folder chosen in the Data tab, or the one QCoDeS uses by default."""
+        return self.services.data.logs_folder or os.path.dirname(qcodes_logger.get_log_file_name())
+
+    def _log_period_s(self):
+        """One row per duration of the time traces (10 min by default): few rows, little to write."""
+        return self._window_s
+
+    def _update_log_target(self, *_):
+        """Start a new log file when the database, the folder or the monitored parameters changed (nothing happens when
+        they did not)."""
+        columns = [p.full_name for p in self._monitored()] if self.log_checkbox.isChecked() else []
+        try:
+            changed = self._log.configure(self._log_folder(), self._log_database(), columns)
+        except OSError as e:
+            self.log_label.setText(f"Cannot log: {e}")
+            return
+        if changed:
+            self._log_started, self._log_last = time.time(), 0.0
+        self._show_log_state()
+
+    def _show_log_state(self):
+        if not self.log_checkbox.isChecked():
+            self.log_label.setText("Logging to file is off.")
+        elif self._log.path is None:
+            self.log_label.setText("Nothing to log: no parameter is monitored." if not self._monitored() else "")
+        else:
+            minutes = self._log_period_s() / 60
+            self.log_label.setText(f"Logging to {self._log.path}, one row every {minutes:g} min.")
+
+    def _log_tick(self):
+        """On the shared 1 Hz tick: write a row when one is due, from the latest readings (no extra read)."""
+        if self._log.path is None or not self.active_checkbox.isChecked():
+            return
+        now = time.time()
+        if self._log_last and now - self._log_last < self._log_period_s():
+            return
+        values, missing = {}, False
+        for parameter in self._monitored():
+            latest = self._latest.get(id(parameter))
+            if latest is not None and latest[1] >= self._log_started:
+                values[parameter.full_name] = latest[0]
+            else:
+                missing = True
+        if missing and now - self._log_started < LOG_WAIT_S:
+            return  # the first readings of this file are on their way
+        try:
+            self._log.write(values)
+        except OSError as e:
+            self.log_label.setText(f"Cannot log: {e}")
+            self._log_last = now  # try again in a period, not every second
+            return
+        self._log_last = now
+
     # ----- context menu -----
     def _show_context_menu(self, position):
         item = self.table.itemAt(position)
@@ -595,6 +683,7 @@ class MonitorTab(QObject):
     def register_session_fields(self, fields):
         """The entries of this tab that are remembered between sessions."""
         fields.register("monitor/active", self.active_checkbox.isChecked, self.active_checkbox.setChecked)
+        fields.register("monitor/log", self.log_checkbox.isChecked, self.log_checkbox.setChecked)
         fields.register("monitor/period", self.period_spin.value, self.period_spin.setValue)
         fields.register("monitor/window_minutes", self.window_spin.value, self.window_spin.setValue)
 

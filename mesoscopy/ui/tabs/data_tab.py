@@ -104,6 +104,7 @@ class DataTab(QObject):
         self.logs_folder_display.setReadOnly(True)
         self.logs_folder_button = QPushButton("Browse...")
         self.logs_folder_button.clicked.connect(self.select_logs_folder)
+        self.logs_folder_display.textChanged.connect(lambda text: self.services.data.set_logs_folder(text.strip()))
 
         logs_folder_layout = QHBoxLayout()
         logs_folder_layout.addWidget(self.logs_folder_display)

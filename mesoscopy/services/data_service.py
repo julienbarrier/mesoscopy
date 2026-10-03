@@ -13,6 +13,7 @@ class DataService(QObject):
     sampleChanged = pyqtSignal(str)  # the sample was set from outside the Data tab (e.g. by Load Snapshot)
     locationChanged = pyqtSignal()    # the database folder or the selected database changed
     entryChanged = pyqtSignal()       # the folder, the selected database or the sample name changed
+    logsFolderChanged = pyqtSignal()  # the QCoDeS log folder of the Data tab changed (the Monitor logs there too)
     runMetadataChanged = pyqtSignal(str, int, str, str)  # database file, run id (as the explorer lists it), "tag" or "notes", the new value
     databaseChosen = pyqtSignal(str)  # a run needs this database (a new one, or the next of a full one): the Data tab
                                       # creates it and selects it, so the selected database is always the one in use
@@ -22,12 +23,18 @@ class DataService(QObject):
         self.folder = ""            # database folder
         self.sample_name = ""
         self.selected_file = None   # path of the database chosen in the Data tab; None: "a new database"
+        self.logs_folder = ""       # the QCoDeS log folder chosen in the Data tab ("": none)
         self.last_note = ""         # why a database other than the selected one is used (size limit), or ""
 
     @property
     def has_database(self):
         """A database is entered: a folder, and a database selected in it or a sample name to name a new one after."""
         return bool(self.folder) and (bool(self.selected_file) or bool(self.sample_name.strip()))
+
+    def set_logs_folder(self, folder):
+        if folder != self.logs_folder:
+            self.logs_folder = folder
+            self.logsFolderChanged.emit()
 
     def set_sample_name(self, name):
         """Set the sample from outside the Data tab; the tab shows it."""
