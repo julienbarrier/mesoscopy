@@ -1,12 +1,18 @@
+import re
 from setuptools import setup, find_packages
-from mesoscopy import __version__
+
+with open("mesoscopy/__init__.py") as f:
+    match = re.search(r"^__version__\s*=\s*['\"]([^'\"]+)['\"]", f.read(), re.M)
+    if not match:
+        raise RuntimeError("Unable to find __version__ in mesoscopy/__init__.py")
+    __version__ = match.group(1)
 
 setup(name='mesoscopy',
       version=__version__,
-      description='Library of utils to run experiments in mesoscopic physics',
+      description='Graphical interface to run experiments',
       url='https://github.com/julienbarrier/mesoscopy',
       author='Julien Barrier',
-      author_email='julien.barrier@manchester.ac.uk',
+      author_email='julien@julienbarrier.eu',
       classifiers=[
           "Intended Audience :: Science/Research",
           "Programming Language :: Python :: 3 :: Only",
@@ -15,19 +21,23 @@ setup(name='mesoscopy',
       ],
       license='MIT',
       packages=find_packages(),
-      python_requires=">=3.9",
+      python_requires=">=3.14",
       install_requires=[
-          "matplotlib>=3.4.0",
-          "pandas>=1.3.0",
-          "pyqt6",
-          "numpy>=1.21.0",
-          "qcodes==0.46.0",
-          "zhinst-qcodes",
-          "qcodes_contrib_drivers",
-          "tqdm",
-          "typing",
+          "matplotlib>=3.8",
+          "numpy>=2.4.2",
+          "pyqt6>=6.10.2",
+          "pyyaml",
+          "qcodes>=0.60.0",
           "scipy",
-          "pathlib",
-          "pyserial"
       ],
+      extras_require={
+          # drivers that the station files of some setups use
+          "zurich": ["zhinst>=26.7.2", "zhinst-qcodes>=0.8.1", "qcodes_contrib_drivers>=0.24.0"],
+          "visa": ["pyvisa-py", "pyserial"],
+      },
+      entry_points={
+          "console_scripts": [
+              "mesoscopy=mesoscopy.main:main",
+          ],
+      },
       zip_safe=False)

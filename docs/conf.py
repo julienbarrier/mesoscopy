@@ -11,22 +11,24 @@
 # documentation root, use os.path.abspath to make it absolute, like shown here.
 #
 import os
-import sys
-sys.path.insert(0, os.path.abspath('..'))
-import mesoscopy
+import re
 
 import sphinx_rtd_theme
 from packaging.version import parse
 
+# the version is read from the file, not imported: building the documentation must not need QCoDeS or Qt
+with open(os.path.join(os.path.dirname(__file__), '..', 'mesoscopy', '__init__.py')) as f:
+    __version__ = re.search(r"^__version__\s*=\s*['\"]([^'\"]+)['\"]", f.read(), re.M).group(1)
+
 # -- Project information -----------------------------------------------------
 
 project = 'mesoscoPy'
-copyright = '2023, Julien Barrier'
+copyright = '2026, Julien Barrier'
 author = 'Julien Barrier'
 
 # The full version, including alpha/beta/rc tags
-version = mesoscopy.__version__
-release = parse(mesoscopy.__version__).public
+version = __version__
+release = parse(__version__).public
 
 
 # -- General configuration ---------------------------------------------------
@@ -37,8 +39,6 @@ release = parse(mesoscopy.__version__).public
 extensions = [
     'sphinx.ext.githubpages',
     'sphinx_rtd_theme',
-    'sphinx.ext.autodoc',
-    'sphinx.ext.autosummary',
     'sphinx.ext.todo',
     'm2r2',
 ]
@@ -65,6 +65,7 @@ html_theme = 'sphinx_rtd_theme'
 # relative to this directory. They are copied after the builtin static files,
 # so a file named "default.css" will overwrite the builtin "default.css".
 html_static_path = ['_static']
+html_title = 'mesoscoPy documentation'
 
 exclude_patterns = ['build',
                     '.DS_Store',
@@ -78,8 +79,8 @@ html_show_copyright = False
 
 html_context = {
     'display_github': True,
-    'github_user': 'condmatphys',
-    'github_repo': 'mesoscoPy',
+    'github_user': 'julienbarrier',
+    'github_repo': 'mesoscopy',
     'conf_py_path': 'main/docs/'
 }
 
@@ -88,10 +89,3 @@ epub_author = author
 epub_copyright = copyright
 epub_publisher = author
 epub_exclude_files = ['search.html']
-
-autoclas_content = 'both'
-autosummary_generate = True
-autodoc_member_order = 'bysource'
-autodoc_default_options = {'members': True, 'undoc-members': True,
-                           'inherited-members': True, 'show-inheritance': True}
-

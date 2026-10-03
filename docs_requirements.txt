@@ -14,9 +14,9 @@ sphinxcontrib-jsmath==1.0.1
 sphinxcontrib-qthelp==1.0.3
 sphinxcontrib-serializinghtml==1.1.5
 sphinxcontrib-towncrier==0.3.2a0
-qcodes==0.46.0
-zhinst
-zhinst-qcodes
+qcodes==0.60.0
+zhinst>=26.7.2
+zhinst-qcodes>=0.8.1
 scipy
 qcodes_contrib_drivers
 m2r2
