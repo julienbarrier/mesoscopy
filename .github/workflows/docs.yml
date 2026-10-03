@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write # lets the token of the workflow replace the docs branch
 
 jobs:
   build:
@@ -16,7 +16,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          persist-credentials: false # the push below uses the DOC_TOKEN, not the token of the workflow
+          persist-credentials: false
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -43,14 +43,11 @@ jobs:
 
       - name: Publish to the docs branch
         if: github.ref == 'refs/heads/main'
-        env:
-          DOC_TOKEN: ${{ secrets.DOC_TOKEN }}
-        run: |
-          cd docs/_build/html
-          touch .nojekyll # GitHub Pages must not process the files with Jekyll
-          git init --initial-branch=docs
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add --all
-          git commit --message "build doc"
-          git push --force "https://x-access-token:${DOC_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" docs
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          # the token the workflow gets from GitHub for this run: no password and no personal access token (DOC_TOKEN)
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_branch: docs
+          publish_dir: docs/_build/html
+          force_orphan: true # the docs branch holds one commit: the built pages
+          commit_message: build doc
