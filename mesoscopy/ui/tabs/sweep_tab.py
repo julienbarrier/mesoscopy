@@ -21,7 +21,7 @@ from mesoscopy.ui.tabs.experiment_name_box import ExperimentNameBox
 from mesoscopy.ui.tabs.measured_box import MeasuredParametersBox
 from mesoscopy.ui.tabs.live_plot import LivePlotPanel
 from mesoscopy.ui.tabs.sweep_box import SweepDimensionBox
-from mesoscopy.ui.tabs.ui_helpers import add_labeled_row, set_groupbox_title_bold
+from mesoscopy.ui.tabs.ui_helpers import add_labeled_row, pause_when_hidden, set_groupbox_title_bold
 
 MAX_DIMENSIONS = 4
 
@@ -50,6 +50,7 @@ class SweepTab(QObject):
         self._pick_target = None    # (edit, text, selector, box) of the Start or Stop field a click on the plot fills in
         self._progress_timer = QTimer()
         self._progress_timer.timeout.connect(self._update_axis_progress)
+        self._progress_pacer = pause_when_hidden(self.tab, self._progress_timer, self._update_axis_progress)  # nothing to move in another tab
         self.setup_ui()
         # follow the services instead of being called: the experiment parameters, the settings and the run
         services.registry.parametersChanged.connect(self._on_parameters_changed)
@@ -64,6 +65,7 @@ class SweepTab(QObject):
         run.runIdsKnown.connect(self.plot_panel.set_run_ids)
         run.liveRunStarted.connect(self.plot_panel.add_live_run)
         run.liveDataChanged.connect(self.plot_panel.live_data_changed)
+        services.ticker.connect_visible(self.plot_panel, self.plot_panel.tick)  # the clocks of the plot: the shared 1 Hz tick
         # the plot fills in the Start or Stop field the cursor is in (run-to-run feedback)
         self.plot_panel.valuePicked.connect(self._on_value_picked)
         self.plot_panel.rangePicked.connect(self._on_range_picked)
@@ -372,9 +374,9 @@ class SweepTab(QObject):
                 box.progress_bar.setMaximum(size)
                 box.progress_bar.setValue(0)
                 box.progress_bar.setVisible(True)
-            self._progress_timer.start(200)
+            self._progress_pacer.start(200)
         else:
-            self._progress_timer.stop()
+            self._progress_pacer.stop()
             for box in self._run_boxes:
                 box.progress_bar.setVisible(False)
             self._run_boxes = []

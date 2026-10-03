@@ -10,7 +10,7 @@ from qcodes.instrument import VisaInstrument
 from mesoscopy.core.command_log import CommandLog, format_entry
 from mesoscopy.core.snapshot_text import rows_to_text, snapshot_rows
 from mesoscopy.core.gateway import USER
-from mesoscopy.ui.tabs.ui_helpers import set_groupbox_title_bold
+from mesoscopy.ui.tabs.ui_helpers import pause_when_hidden, set_groupbox_title_bold
 
 PAGE_LOG, PAGE_RAW, PAGE_SNAPSHOT = range(3)
 LOG_REFRESH_MS = 500
@@ -55,6 +55,7 @@ class InstrumentDetailPanel(QWidget):
 
         self._timer = QTimer(self)
         self._timer.timeout.connect(self._refresh_log)
+        self._pacer = pause_when_hidden(self, self._timer, self._refresh_log)  # the log is only refreshed while it can be seen
         self.setVisible(False)
 
     # ================= pages =================
@@ -150,18 +151,18 @@ class InstrumentDetailPanel(QWidget):
         if self.name is not None:
             self._show_page(self.stack.currentIndex())
         else:
-            self._timer.stop()
+            self._pacer.stop()
 
     def _instrument(self):
         return self.services.station.instruments().get(self.name) if self.name else None
 
     def _show_page(self, page):
         self.stack.setCurrentIndex(page)
-        self._timer.stop()
+        self._pacer.stop()
         if page == PAGE_LOG:
             self._log_version = None
             self._refresh_log()
-            self._timer.start(LOG_REFRESH_MS)
+            self._pacer.start(LOG_REFRESH_MS)
         elif page == PAGE_RAW:
             self._update_raw_page()
         else:
@@ -279,4 +280,4 @@ class InstrumentDetailPanel(QWidget):
             self.services.status.show("Snapshot copied to the clipboard.", 3000)
 
     def shutdown(self):
-        self._timer.stop()
+        self._pacer.stop()

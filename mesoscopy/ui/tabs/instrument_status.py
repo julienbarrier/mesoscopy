@@ -125,6 +125,8 @@ class InstrumentHealthMonitor(QObject):
         self._get_components = get_components
         self._gateway = gateway
         self._timeout_s = timeout_s
+        self._interval_s = interval_ms / 1000
+        self._alive = {}     # name -> monotonic time of the last read that another part of the application got answered
         self._inflight = {}  # name -> (start time, job)
         self.status = {}
         self._timer = QTimer(self)
@@ -134,9 +136,25 @@ class InstrumentHealthMonitor(QObject):
     def stop(self):
         self._timer.stop()
 
+    def note_alive(self, names):
+        """The instruments ``names`` just answered a read made for another purpose (the Monitor's): that is as good as a
+        get_idn, so it counts as the check and the next get_idn of each is put off."""
+        now, changed = time.monotonic(), False
+        for name in names:
+            entry = self.status.get(name)
+            if entry is None:
+                continue
+            self._alive[name] = now
+            if entry["ok"] is not True or entry["error"]:
+                entry["ok"], entry["error"], changed = True, "", True
+            entry["time"] = datetime.now()
+        if changed:
+            self.changed.emit()
+
     def forget(self, name):
         """Drop the status of ``name`` so it is re-checked from scratch (e.g. after a reload)."""
         self.status.pop(name, None)
+        self._alive.pop(name, None)
         self._inflight.pop(name, None)
 
     def sync(self):
@@ -160,6 +178,9 @@ class InstrumentHealthMonitor(QObject):
             instrument = components.get(name)
             if instrument is None:
                 continue
+            if (time.monotonic() - self._alive.get(name, -1e9) < self._interval_s
+                    and self.status[name]["idn"] is not None):
+                continue  # the Monitor read this instrument a moment ago: it is alive, no need to ask again
             if name in self._inflight:
                 started, _ = self._inflight[name]
                 if time.monotonic() - started > self._timeout_s and self.status[name]["ok"] is not False:

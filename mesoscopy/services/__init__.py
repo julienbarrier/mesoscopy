@@ -18,6 +18,7 @@ from mesoscopy.services.measuring import Measuring
 from mesoscopy.services.run_controller import RunController
 from mesoscopy.services.run_queue import RunQueue
 from mesoscopy.services.station_service import StationService
+from mesoscopy.services.ticker import Ticker
 from mesoscopy.services.status import StatusMessages
 
 
@@ -36,6 +37,7 @@ class Services:
     queue: RunQueue = None     # the recipes run one after another
     measuring: Measuring = None  # a measurement is going on: the controls that are unavailable meanwhile
     alarms: AlarmService = None   # the alarms on parameters
+    ticker: Ticker = None         # the one 1 Hz tick of the clocks
 
 
 def create_services(settings=None, parent=None):
@@ -45,6 +47,7 @@ def create_services(settings=None, parent=None):
         station=StationService(), registry=ParameterRegistry(), data=DataService(), restore=RestoreHistory(),
     )
     services.station.stationChanged.connect(services.restore.clear)  # the values of another station mean nothing here
+    services.ticker = Ticker(parent)
     services.ramp = RampService(services)
     services.run = RunController(services)
     services.experiments = ExperimentNamesService(services)

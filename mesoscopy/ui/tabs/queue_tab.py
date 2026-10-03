@@ -46,9 +46,7 @@ class QueueTab(QObject):
         services.registry.parametersChanged.connect(self.refresh)  # ramp rates are part of the estimates
         queue.stateChanged.connect(lambda _state: self.update_controls())
         run.runStateChanged.connect(lambda _state: self.update_controls())
-        self._timer = QTimer(self)
-        self._timer.timeout.connect(self._update_progress)
-        self._timer.start(PROGRESS_MS)
+        services.ticker.connect_visible(self.tab, self._update_progress)  # the shared 1 Hz tick, only while the tab is shown
         self.refresh()
 
     # ================= layout =================

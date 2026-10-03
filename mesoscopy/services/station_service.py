@@ -16,6 +16,7 @@ class StationService(QObject):
     stationChanged = pyqtSignal()
     instrumentsChanged = pyqtSignal()
     monitoredChanged = pyqtSignal()
+    instrumentsAlive = pyqtSignal(object)  # names of instruments that just answered a read (the monitor's): no need to ask get_idn
 
     def __init__(self):
         super().__init__()

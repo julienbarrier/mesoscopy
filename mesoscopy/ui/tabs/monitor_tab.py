@@ -19,6 +19,7 @@ from mesoscopy.core.plot_math import decimate, nice_step
 MIN_PERIOD_S, MAX_PERIOD_S, DEFAULT_PERIOD_S = 1, 3600, 5
 MIN_WINDOW_MIN, MAX_WINDOW_MIN, DEFAULT_WINDOW_MIN = 1, 1440, 10  # duration shown by the time traces
 MAX_WINDOW_S = MAX_WINDOW_MIN * 60  # history is kept for the longest duration, so the scale can be widened later
+HIDDEN_REDRAW_S = 5  # seconds between two redraws of the traces while the Monitor tab is hidden
 MAX_POINTS = 100_000  # safety bound on the points kept per parameter
 TRACES_PER_ROW = 2
 COLUMNS = ("Parameter", "Value", "Updated", "Show time trace", "")
@@ -130,6 +131,23 @@ class TimeTrace(QWidget):
         painter.drawEllipse(points[-1], 2.5, 2.5)  # latest value
 
 
+def instrument_groups(parameters):
+    """[(set of instrument names, [parameters])]: the parameters split into groups that share no instrument, so that the
+    groups can be read at the same time. A parameter that depends on several instruments (a delegate, a derived one) joins
+    their groups into one. The parameters that touch no instrument form a group of their own."""
+    groups = []  # [names, parameters]
+    for parameter in parameters:
+        names = set(parameter_instruments(parameter))
+        touching = [g for g in groups if g[0] & names] if names else [g for g in groups if not g[0]]
+        merged = [set(names), [parameter]]
+        for group in touching:
+            groups.remove(group)
+            merged[0] |= group[0]
+            merged[1] = group[1] + merged[1]
+        groups.append(merged)
+    return [(names, members) for names, members in groups]
+
+
 def _poll_parameters(parameters):
     """Reads every monitored parameter, one after the other (in a gateway thread).
 
@@ -169,14 +187,15 @@ class MonitorTab(QObject):
         self._last_time = {}    # id(parameter) -> time of that reading
         self._window_s = DEFAULT_WINDOW_MIN * 60
         self._polling = False
+        self._poll_left, self._poll_results = 0, []
         self._timer = QTimer()
         self._timer.timeout.connect(self._on_timer)
-        self._redraw_timer = QTimer()  # moves the traces along with the clock between two readings
-        self._redraw_timer.timeout.connect(self._redraw_traces)
         self._monitored_count = 0
         self.setup_ui()
         self._timer.start(DEFAULT_PERIOD_S * 1000)
-        self._redraw_timer.start(1000)
+        # the traces move along with the clock between two readings: on the shared 1 Hz tick while the tab is shown, every
+        # HIDDEN_REDRAW_S while it is not (the sparklines of the status bar follow them)
+        services.ticker.connect_visible(self.tab, self._redraw_traces, hidden_every=HIDDEN_REDRAW_S)
         # follow the services: what is monitored, the station and its instruments, the experiment parameters
         services.station.monitoredChanged.connect(self._on_monitored_changed)
         services.station.stationChanged.connect(self.sync)
@@ -465,33 +484,46 @@ class MonitorTab(QObject):
             self.poll(background=True)
 
     def poll(self, background=False):
-        """Read all monitored parameters (through the instrument gateway). The periodic reads are background
-        jobs: an instrument in use (a measurement, a ramp) is skipped and read at the next tick."""
+        """Read all monitored parameters (through the instrument gateway), the instruments that are independent of each
+        other at the same time, one gateway job per group of instruments. The periodic reads are background jobs: an
+        instrument in use (a measurement, a ramp) is skipped and read at the next tick."""
         parameters = self._poll_set()
         if not parameters or self._polling:
             return
         gateway = self.services.gateway
-        instruments = set().union(*(parameter_instruments(p) for p in parameters))
-        job = gateway.submit(_poll_parameters, parameters, kind=BACKGROUND if background else USER,
-                             instruments=instruments, label="Reading the monitored parameters")
-        if job is None:
+        results_left = 0
+        for names, group in instrument_groups(parameters):
+            job = gateway.submit(_poll_parameters, group, kind=BACKGROUND if background else USER, instruments=names,
+                                 label="Reading the monitored parameters")
+            if job is None:
+                continue  # that group is in use: it is read at the next tick (or the refusal is shown below)
+            results_left += 1
+            job.signals.result.connect(self._on_group_polled)
+            job.signals.error.connect(self._on_poll_error)
+        if results_left == 0:
             if gateway.run_active():
                 self._update_status("A measurement is running: the instruments are not read in parallel, the measurement "
                                     "updates the monitor itself, at most once per period.")
             elif not background:
                 self._update_status(gateway.last_refusal)
             return
-        self._polling = True
-        job.signals.result.connect(self._on_polled)
-        job.signals.error.connect(self._on_poll_error)
+        self._polling, self._poll_left, self._poll_results = True, results_left, []
 
     def _on_poll_error(self, error):
-        self._polling = False
         self._update_status(f"Could not read the monitored parameters: {error[1]}")
+        self._group_done([])
 
-    def _on_polled(self, results):
-        self._polling = False
-        self._apply_results(results)
+    def _on_group_polled(self, results):
+        self._group_done(results)
+
+    def _group_done(self, results):
+        """One group of instruments has been read: when all have, show the readings together."""
+        self._poll_results.extend(results)
+        self._poll_left -= 1
+        if self._poll_left <= 0:
+            self._polling = False
+            if self._poll_results:
+                self._apply_results(self._poll_results)
 
     def _on_run_readings(self, results):
         """Readings the running measurement took for the monitored parameters (see ``RunController._feed_monitor``)."""
@@ -533,6 +565,13 @@ class MonitorTab(QObject):
         if numeric_changed:
             self.sync()  # disables the trace checkbox of the non-numeric parameter
         self.services.alarms.check_values(alarm_pairs)
+        alive = set()
+        for key, reading, error in results:  # an instrument that answered is alive: the health check need not ask
+            row = self._rows.get(key)
+            if row is not None and reading is not None and not error:
+                alive |= set(parameter_instruments(row["parameter"]))
+        if alive:
+            self.services.station.instrumentsAlive.emit(alive)
         self._redraw_traces()
         if errors:
             self._update_status("Could not read: " + "; ".join(errors))
@@ -561,4 +600,3 @@ class MonitorTab(QObject):
 
     def shutdown(self):
         self._timer.stop()
-        self._redraw_timer.stop()

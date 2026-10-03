@@ -76,6 +76,7 @@ class StationManager:
             gateway=services.gateway,
         )
         self.health.changed.connect(self.refresh_connected_status)
+        self.services.station.instrumentsAlive.connect(self.health.note_alive)  # a read of the Monitor counts as a check
         self._snapshot_updater = _SnapshotUpdater(self)
 
     @property

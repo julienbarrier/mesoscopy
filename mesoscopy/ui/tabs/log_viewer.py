@@ -8,6 +8,7 @@ from PyQt6.QtWidgets import (
     QPlainTextEdit, QPushButton, QSplitter, QTableView, QVBoxLayout,
 )
 
+from mesoscopy.ui.tabs.ui_helpers import pause_when_hidden
 from mesoscopy.core.log_reader import (
     LEVELS, filter_records, find_log_files, read_log, root_instruments,
 )
@@ -135,6 +136,7 @@ class LogViewerDialog(QDialog):
 
         self._timer = QTimer(self)
         self._timer.timeout.connect(lambda: self.reload(force=False))
+        self._pacer = pause_when_hidden(self, self._timer)  # a window that is hidden or minimised does not follow the log
         self.refresh_files()
 
     # ----- files -----
@@ -182,9 +184,9 @@ class LogViewerDialog(QDialog):
 
     def _follow_toggled(self, on):
         if on:
-            self._timer.start(FOLLOW_MS)
+            self._pacer.start(FOLLOW_MS)
         else:
-            self._timer.stop()
+            self._pacer.stop()
 
     # ----- filters -----
     def apply_filters(self, *_args):
@@ -215,5 +217,5 @@ class LogViewerDialog(QDialog):
         QApplication.clipboard().setText("\n".join(r.as_text() for r in self.model.records))
 
     def closeEvent(self, event):
-        self._timer.stop()
+        self._pacer.stop()
         super().closeEvent(event)

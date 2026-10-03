@@ -247,8 +247,7 @@ class LivePlotPanel(QWidget):
 
         self._pool = QThreadPool(self)
         self._pool.setMaxThreadCount(1)
-        self._tick_timer = QTimer(self)
-        self._tick_timer.timeout.connect(self._tick)
+        self._clock_running = False  # the clocks follow the shared 1 Hz tick (``tick``), see services/ticker.py
         self._refresh_timer = QTimer(self)
         self._refresh_timer.timeout.connect(self.refresh)
         self._live_redraw = QTimer(self)  # while the first sweep of a run comes in, show it as it grows
@@ -298,7 +297,7 @@ class LivePlotPanel(QWidget):
         self.run_label.setText(f"Run: starting – {measurement_name}")
         self.status_label.setText("Waiting for the first points...")
         self._tick()
-        self._tick_timer.start(1000)
+        self._clock_running = True
         self._update_auto_timer()
         token = self._token
         QTimer.singleShot(1000, lambda: self.refresh() if token == self._token else None)
@@ -338,7 +337,7 @@ class LivePlotPanel(QWidget):
         self._running = False
         if self._progress is not None:
             self._progress.finish()
-        self._tick_timer.stop()
+        self._clock_running = False
         self._refresh_timer.stop()
         self._live_redraw.stop()
         self._tick()
@@ -347,7 +346,7 @@ class LivePlotPanel(QWidget):
     def shutdown(self):
         """Stop timers and wait for a running database read (used when the window closes)."""
         self._token += 1
-        self._tick_timer.stop()
+        self._clock_running = False
         self._refresh_timer.stop()
         self._live_redraw.stop()
         if self._past_job is not None:
@@ -356,6 +355,11 @@ class LivePlotPanel(QWidget):
         self._past_pool.waitForDone(3000)
 
     # ----- clocks -----
+    def tick(self):
+        """The shared 1 Hz tick: move the clocks while a run is in progress."""
+        if self._clock_running:
+            self._tick()
+
     def _tick(self):
         if self._progress is None:
             return
@@ -372,6 +376,7 @@ class LivePlotPanel(QWidget):
     # ----- reading the data -----
     def showEvent(self, event):
         super().showEvent(event)
+        self._tick()  # the clocks did not move while the panel was hidden
         if self._stale:  # nothing was drawn while the tab was hidden
             self._stale = False
             self.refresh(force=True)
