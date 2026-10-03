@@ -1,0 +1,176 @@
+# Station-file templates: presets and aliases for the instrument families used in the lab.
+#
+# These replace the setup that used to be hardcoded in Python (init_mfli, init_sr830, init_sr860,
+# init_smu, init_sim928, configure_smu_2614B_gate and the Lock-ins/SMU boxes of the Instruments tab).
+# Copy the blocks you need into your own <name>.station.yaml and adapt addresses and values.
+# The MFLI master block is live in mesoscopy/_test_.station.yaml.
+#
+#   parameters:      PRESETS, applied by QCoDeS in the order written when the instrument is loaded.
+#   add_parameters:  ALIASES with the same names for every instrument of a family (the contract):
+#                      lock-ins: freq, amplitude, time_constant, filter_order / filter_slope, phase,
+#                                harmonic, sinc, input_range / sensitivity, input_diff / input_config, ac_coupling
+#                      SMU channels: voltage, current, limit_v, limit_i
+#
+# STATUS: the parameter names were checked to exist in the installed drivers, but these templates
+# were NOT loaded on real instruments. Check them on the bench before relying on them.
+# SAFETY: switching an output on is commented out everywhere (the old init_* functions did switch outputs
+# on). Uncomment deliberately.
+# Master/slave: there is no flag. A slave is simply an instrument whose presets make it follow the
+# master's reference (external reference, ADC select, output off), as in the blocks below.
+
+instruments:
+  # ================================================================ MFLI used as a SLAVE lock-in
+  # (was: init_mfli for every lock-in after the first, and the "slave" role of the Instruments tab)
+  mfli_slave:
+    type: qcodes_contrib_drivers.drivers.ZurichInstruments.MFLI.MFLI
+    init: {serial: 'DEV00000', host: 'localhost', interface: '1GbE'}
+    parameters:
+      demods[1].adcselect: {initial_value: 3}
+      demods[0].adcselect: {initial_value: 0}
+      extrefs[0].enable: {initial_value: 1}          # follow the reference of the master
+      sigouts[0].on: {initial_value: 0}              # a slave does not drive the sample
+      triggers.out[0].source: {initial_value: 0}
+      triggers.out[1].source: {initial_value: 0}
+      demods[0].oscselect: {initial_value: 0}
+      demods[0].harmonic: {initial_value: 1}
+      demods[0].phaseshift: {initial_value: 0}
+      demods[0].sinc: {initial_value: 1}
+      demods[0].timeconstant: {initial_value: 0.03}
+      demods[0].order: {initial_value: 4}
+      sigins[0].ac: {initial_value: 1}
+      sigins[0].imp50: {initial_value: 0}
+      sigins[0].diff: {initial_value: 1}
+      sigins[0].float: {initial_value: 1}
+      sigins[0].scaling: {initial_value: 1}
+      sigins[0].range: {initial_value: 0.003}
+    add_parameters:
+      freq: {source: "oscs[0].freq", unit: Hz}
+      time_constant: {source: "demods[0].timeconstant", unit: s}
+      filter_order: {source: "demods[0].order"}
+      phase: {source: "demods[0].phaseshift", unit: deg}
+      harmonic: {source: "demods[0].harmonic"}
+      sinc: {source: "demods[0].sinc"}
+      input_range: {source: "sigins[0].range", unit: V}
+      input_diff: {source: "sigins[0].diff"}
+      ac_coupling: {source: "sigins[0].ac"}
+
+  # ================================================================ Stanford SR830
+  # MASTER (internal reference). was: init_sr830 without MFLI/SR860, and the master role of the Instruments tab
+  sr830_master:
+    type: qcodes.instrument_drivers.stanford_research.SR830.SR830
+    init: {address: 'GPIB0::8::INSTR'}
+    parameters:
+      reference_source: {initial_value: internal}
+      amplitude: {initial_value: 1}
+      frequency: {initial_value: 377.778}
+      time_constant: {initial_value: 0.03}
+      harmonic: {initial_value: 1}
+      input_config: {initial_value: a-b}
+      input_shield: {initial_value: float}
+      input_coupling: {initial_value: DC}
+      phase: {initial_value: 0}
+      sensitivity: {initial_value: 20.0e-6}
+      notch_filter: {initial_value: both}
+      sync_filter: {initial_value: 'on'}
+      filter_slope: {initial_value: 24}              # 24 dB/oct: the default of the Instruments tab (init_sr830 used 18)
+    add_parameters:
+      freq: {source: frequency, unit: Hz}
+      amplitude_out: {source: amplitude, unit: V}
+      filter_slope_db: {source: filter_slope}
+      sinc: {source: sync_filter}
+  # SLAVE: same input setup, but locked to an external reference (was: reference_source('external') for sr830s[1:])
+  sr830_slave:
+    type: qcodes.instrument_drivers.stanford_research.SR830.SR830
+    init: {address: 'GPIB0::9::INSTR'}
+    parameters:
+      reference_source: {initial_value: external}
+      time_constant: {initial_value: 0.03}
+      harmonic: {initial_value: 1}
+      input_config: {initial_value: a-b}
+      input_shield: {initial_value: float}
+      input_coupling: {initial_value: DC}
+      phase: {initial_value: 0}
+      sensitivity: {initial_value: 20.0e-6}
+      notch_filter: {initial_value: both}
+      sync_filter: {initial_value: 'on'}
+      filter_slope: {initial_value: 24}
+
+  # ================================================================ Stanford SR860
+  # (was: init_sr860). As a slave to an MFLI or another lock-in use reference_source: EXT and drop frequency/amplitude.
+  sr860:
+    type: qcodes.instrument_drivers.stanford_research.SR860.SR860
+    init: {address: 'TCPIP0::192.168.0.10::inst0::INSTR'}
+    parameters:
+      reference_source: {initial_value: INT}
+      amplitude: {initial_value: 1}
+      frequency: {initial_value: 377.778}
+      time_constant: {initial_value: 0.03}
+      harmonic: {initial_value: 1}
+      input_config: {initial_value: a-b}
+      input_shield: {initial_value: float}
+      input_coupling: {initial_value: ac}
+      phase: {initial_value: 0}
+      sensitivity: {initial_value: 20.0e-6}
+      sync_filter: {initial_value: 'ON'}
+      filter_slope: {initial_value: 24}
+    add_parameters:
+      freq: {source: frequency, unit: Hz}
+      amplitude_out: {source: amplitude, unit: V}
+      sinc: {source: sync_filter}
+
+  # ================================================================ Keithley 2614B (Keithley2600 wrapper class)
+  # (was: configure_smu_2614B_gate defaults and the SMU box of the Instruments tab; init_smu used
+  #  limits 20 V / 10 nA and max rates 0.05 and 0.1 V/s for the two channels)
+  keithley:
+    type: mesoscopy.instrument.smu.Keithley2600
+    init: {address: 'GPIB0::26::INSTR'}
+    parameters:
+      smua.mode: {initial_value: voltage}
+      smua.nplc: {initial_value: 5}
+      smua.limitv: {initial_value: 20}
+      smua.limiti: {initial_value: 10.0e-9}
+      smua.sourcerange_v: {initial_value: 20}
+      smua.measurerange_v: {initial_value: 20}
+      smua.measurerange_i: {initial_value: 1.0e-7}
+      smua.max_rate: {initial_value: 0.05}           # V/s, the largest ramp the gate may see
+      smub.mode: {initial_value: voltage}
+      smub.nplc: {initial_value: 5}
+      smub.limitv: {initial_value: 20}
+      smub.limiti: {initial_value: 10.0e-9}
+      smub.sourcerange_v: {initial_value: 20}
+      smub.measurerange_v: {initial_value: 20}
+      smub.measurerange_i: {initial_value: 1.0e-7}
+      smub.max_rate: {initial_value: 0.1}
+      # SAFETY: outputs stay off at load. init_smu switched them on after setting the ranges.
+      # smua.output: {initial_value: 'on'}
+      # smub.output: {initial_value: 'on'}
+    add_parameters:
+      smua.voltage: {source: smua.volt, unit: V}
+      smua.current: {source: smua.curr, unit: A}
+      smub.voltage: {source: smub.volt, unit: V}
+      smub.current: {source: smub.curr, unit: A}
+
+  # ================================================================ Keithley 2400 family (Keithley2400 wrapper class)
+  # (was: init_smu for 2400s, voltage mode, limits 20 V / 10 nA)
+  keithley2400:
+    type: mesoscopy.instrument.smu.Keithley2400
+    init: {address: 'GPIB0::24::INSTR'}
+    parameters:
+      source.function: {initial_value: voltage}
+      source.user_number: {initial_value: 1}
+      sense.user_number: {initial_value: 1}
+      source.range: {initial_value: 20}
+      sense.function: {initial_value: current}
+      sense.four_wire_measurement: {initial_value: false}
+      sense.range: {initial_value: 1.0e-8}
+      source.limit: {initial_value: 10.0e-9}
+      max_rate: {initial_value: 0.05}
+      # output_enabled: {initial_value: true}        # SAFETY: off at load
+
+  # ================================================================ SRS SIM928 voltage source
+  # (was: init_sim928, max sweep rate 0.15 V/s)
+  sim928:
+    type: mesoscopy.instrument.smu.SRS_SIM928
+    init: {address: 'GPIB0::2::INSTR'}
+    parameters:
+      max_rate: {initial_value: 0.15}

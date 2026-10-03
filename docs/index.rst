@@ -1,62 +1,45 @@
-.. mesoscoPy documentation master file, created by
-   sphinx-quickstart on Thu Nov 18 12:29:26 2021.
-   You can adapt this file completely to your liking, but it should at least
-   contain the root `toctree` directive.
+.. mesoscoPy documentation master file.
 
-mesoscoPy's documentation
-=========================
+mesoscoPy
+=========
 
+mesoscoPy is a graphical program to run electron-transport experiments. It controls the instruments of a measurement setup
+(sources, lock-in amplifiers, meters, cryostat and magnet) through `QCoDeS <https://microsoft.github.io/Qcodes/>`_, runs
+sweeps and queues of measurements, shows them live, and stores everything in QCoDeS databases.
 
-mesoscoPy is a high level program to run electron transport experiments. It was
-designed with the Manchester setup in mind, but can easily be adapted to a
-variety of different cryostats and measurement equipments.
-
-This documentation describe the installation of the program, and steps to run
-experiments in transport physics. This kind of experiments are usually composed
-of DC voltage and current sources, lock-in amplifiers and a cryostat or dilution
-refrigerator equipped with a superconducting magnet. mesoscoPy allows the use of
-multiple equipments to perform this kind of measurements.
-
+This documentation follows the program: after the quick overview there is one page for each tab, in the order you use them.
 
 .. toctree::
    :maxdepth: 1
    :caption: Getting started
 
-   start/overview
-   start/installation
-   start/first-steps
-   .. start/issue
-   start/faq
-   start/changelog
-
-.. toctree::
-   :maxdepth: 2
-   :caption: User Guide
-
-   user/instrument
-   user/measurement
-   user/experiment
-   user/analysis
+   installation
+   quickstart
+   station_file
 
 .. toctree::
    :maxdepth: 1
-   :caption: Examples
+   :caption: The tabs
 
-   examples/halleffect
-   examples/josephson
+   tabs/data
+   tabs/instruments
+   tabs/parameter_explorer
+   tabs/measurement
+   tabs/queue
+   tabs/monitor
 
 .. toctree::
    :maxdepth: 1
-   :caption: API Documentation
+   :caption: The whole program
 
-   api/index
+   program/settings
+   program/safety
 
-Indices and tables
-------------------
+.. toctree::
+   :maxdepth: 1
+   :caption: More
 
-* :ref:`genindex`
-* :ref:`modindex`
-* :ref:`search`
+   changelog
 
 License
 -------

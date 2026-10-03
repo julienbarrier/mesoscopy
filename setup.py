@@ -9,7 +9,7 @@ with open("mesoscopy/__init__.py") as f:
 
 setup(name='mesoscopy',
       version=__version__,
-      description='Library of utils to run experiments in mesoscopic physics',
+      description='Graphical interface to run experiments',
       url='https://github.com/julienbarrier/mesoscopy',
       author='Julien Barrier',
       author_email='julien@julienbarrier.eu',
@@ -23,18 +23,18 @@ setup(name='mesoscopy',
       packages=find_packages(),
       python_requires=">=3.14",
       install_requires=[
-          "matplotlib>=3.4.0",
-          "pandas",
-          "pyqt6",
+          "matplotlib>=3.8",
           "numpy>=2.4.2",
+          "pyqt6>=6.10.2",
+          "pyyaml",
           "qcodes>=0.60.0",
-          "zhinst>=26.7.2",
-          "zhinst-qcodes>=0.8.1",
-          "qcodes_contrib_drivers>=0.24.0",
-          "tqdm",
           "scipy",
-          "pyserial"
       ],
+      extras_require={
+          # drivers that the station files of some setups use
+          "zurich": ["zhinst>=26.7.2", "zhinst-qcodes>=0.8.1", "qcodes_contrib_drivers>=0.24.0"],
+          "visa": ["pyvisa-py", "pyserial"],
+      },
       entry_points={
           "console_scripts": [
               "mesoscopy=mesoscopy.main:main",

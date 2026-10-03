@@ -4,12 +4,12 @@ mesoscopy - Experiment Runner for mesoscopic physics
 |DOCS| |python versions|
 
 Mesoscopy is a graphical user interface to run experiments in mesoscopic physics. It runs with QCoDeS as a backend.
-To install and learn how to use, read `First steps with mesoscoPy <https://mpilde.github.io/mesoscopy/start/first-steps.html>`__.
+To install and learn how to use, read `the quick overview <https://mpilde.github.io/mesoscopy/quickstart.html>`__.
 
 Install
 =======
 
-Refer to `our documentation <https://mpilde.github.io/mesoscopy/start/installation.html>`__ for installation.
+Refer to `our documentation <https://mpilde.github.io/mesoscopy/installation.html>`__ for installation.
 
 Documentation
 =============
