@@ -18,6 +18,10 @@ mesoscoPy is a graphical program to run electron-transport experiments. You desc
 choose which of their parameters you want to sweep and measure, and run the measurement. The data is written to
 `QCoDeS <https://microsoft.github.io/Qcodes/>`_ databases, and you follow the measurement live in a plot.
 
+Before getting started, we recommend familiarizing yourself with
+'QCoDeS <https://microsoft.github.io/Qcodes/examples/basic_examples/15_minutes_to_QCoDeS.html>'. You will need to know of
+QCoDeS Instruments, Parameters, Station, Measurements and Databases.
+
 Start the program
 -----------------
 
