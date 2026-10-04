@@ -70,6 +70,8 @@ instance/
 
 # Sphinx documentation
 docs/_build/
+# screenshots of the documentation: made from the program by docs/make_screenshots.py (the docs workflow does it)
+docs/_static/img/
 doc_html/
 docs/api/
 

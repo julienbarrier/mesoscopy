@@ -12,7 +12,12 @@ BUILDDIR      = _build
 help:
 	@$(SPHINXBUILD) -M help "$(SOURCEDIR)" "$(BUILDDIR)" $(SPHINXOPTS) $(O)
 
-.PHONY: help Makefile
+# Make the screenshots of the documentation from the program (needs the program installed; takes about five minutes).
+# Run it once before the first `make html`: the pages refer to docs/_static/img/*.png, and the workflow does the same.
+screenshots:
+	python make_screenshots.py
+
+.PHONY: help screenshots Makefile
 
 # Catch-all target: route all unknown targets to Sphinx using the new
 # "make mode" option.  $(O) is meant as a shortcut for $(SPHINXOPTS).

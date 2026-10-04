@@ -1,23 +1,6 @@
-decorator==5.1.1
-defusedxml==0.7.1
-docutils
-nbclient==0.10.2
-nbconvert
-nbformat==5.8.0
-nbsphinx==0.9.8
-sphinx-jsonschema==1.19.1
-sphinx-rtd-theme==3.1.0
-sphinxcontrib-applehelp==2.0.0
-sphinxcontrib-devhelp==1.0.2
-sphinxcontrib-htmlhelp==2.0.1
-sphinxcontrib-jsmath==1.0.1
-sphinxcontrib-qthelp==1.0.3
-sphinxcontrib-serializinghtml==1.1.5
-sphinxcontrib-towncrier==0.3.2a0
-qcodes==0.60.0
-zhinst>=26.7.2
-zhinst-qcodes>=0.8.1
-scipy
-qcodes_contrib_drivers
+# What it takes to build the documentation (docs/): the program itself is not imported, so QCoDeS and Qt are not needed.
+sphinx
+sphinx-rtd-theme
 m2r2
 mistune<2.0.0
+packaging

@@ -34,6 +34,8 @@ setup(name='mesoscopy',
           # drivers that the station files of some setups use
           "zurich": ["zhinst>=26.7.2", "zhinst-qcodes>=0.8.1", "qcodes_contrib_drivers>=0.24.0"],
           "visa": ["pyvisa-py", "pyserial"],
+          # to run the tests (tests/, see .github/workflows/tests.yml)
+          "test": ["pytest", "pytest-qt"],
       },
       entry_points={
           "console_scripts": [
