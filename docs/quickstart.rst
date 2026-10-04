@@ -152,3 +152,4 @@ Where to go next
 - Describing your own instruments in a station file: :doc:`station_file`, and connecting them: :doc:`tabs/instruments`.
 - Safe limits, ramp rates and what happens when you close the program: :doc:`program/safety`.
 - Program-wide options (*File*, *Settings...*): :doc:`program/settings`.
+- What the program does not do yet: :doc:`program/roadmap`.

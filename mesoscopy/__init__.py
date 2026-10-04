@@ -8,4 +8,4 @@ from qcodes.dataset import load_or_create_experiment as create_exp
 import time
 import numpy as np
 
-__version__ = '0.2.0a'
+__version__ = '0.2.0'
